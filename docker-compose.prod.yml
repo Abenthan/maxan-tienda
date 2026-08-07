@@ -1,0 +1,38 @@
+# ============================================================
+# maxan-tienda — PRODUCCIÓN
+# Backend (Node) + Frontend (Nginx) sobre la red compartida
+# maxan_shared, que también usa el postgres del ERP (maxan_db).
+#
+# Prerrequisito (una vez por servidor):
+#   docker network create maxan_shared
+#
+# Uso:
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+#   - Frontend: http://127.0.0.1:8082 (Caddy: tienda.maxansistemas.com → 8082)
+#   - Backend:  interno (expose 3007, solo red Docker)
+# ============================================================
+services:
+  tienda-backend:
+    build: ./backend
+    container_name: maxan-tienda-backend
+    restart: unless-stopped
+    env_file: .env.prod
+    environment:
+      DB_HOST: ${DB_HOST:?Define DB_HOST en .env.prod}
+      DB_PORT: ${DB_PORT:?Define DB_PORT en .env.prod}
+      JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET en .env.prod (idéntico al de maxan-auth/ERP)}
+      NODE_ENV: production
+    expose:
+      - "3007"
+
+  tienda-frontend:
+    build: ./frontend
+    container_name: maxan-tienda-frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8082:80"
+
+networks:
+  default:
+    name: maxan_shared
+    external: true

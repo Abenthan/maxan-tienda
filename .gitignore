@@ -1,0 +1,14 @@
+# Entornos (contienen secretos de producción)
+.env
+.env.prod
+.env.*.local
+
+# Node
+node_modules/
+
+# Builds
+frontend/dist/
+backend/dist/
+
+# opencode
+.opencode/

@@ -1,0 +1,95 @@
+# Contexto del proyecto: maxan-tienda
+
+## Propósito
+Tienda online del ecosistema Maxan Sistemas en **tienda.maxansistemas.com** (puerto local **8082**): catálogo de productos, login/registro SSO, carrito y generación de **cotizaciones** (sin pasarela de pago en el MVP; el asesor confirma la venta desde el ERP). La fuente de verdad del proyecto es `README.md`.
+
+## Regla de documentación
+Actualizar **AGENTS.md** y **README.md** conforme avanza el desarrollo.
+
+## Estado actual (Fase 1 — esqueleto funcional)
+- `backend/` — Express 5 + `pg` + `jsonwebtoken` + `cors`. `src/index.js` (servidor, `GET /health` con BD, `app.locals.pool`, `trust proxy`), `src/config/{db,auth}.js` (`auth.js` exige `JWT_SECRET` en prod), `src/middleware/auth.js` (`authenticate`/`authorizeRol`, idénticos al ERP), rutas vacías `routes/{catalogo,pedidos}.js`. Puerto interno **3007**. Dockerfile prod (multi-stage no-root, healthcheck `/health`) + Dockerfile.dev (nodemon).
+- `frontend/` — React 19 + Vite 8 + TS 6 + Tailwind 4 + router-dom v7. Solo ruta `/` (placeholder catálogo), `*` → redirect. Tema brand (`--color-navy #0c2c59`, `--color-brand`). Dockerfile prod (nginx) + dev (Vite HMR), `nginx.conf` (proxy `/api/` + `/health` → `tienda-backend:3007`, SPA fallback). Dev en **5178**.
+- `db/01_tienda.sql` — schema `tienda`: `productos_venta` (FK `inventario.productos`), `cotizaciones` (estado `pendiente|confirmada|cancelada`), `cotizaciones_items` (snapshot, sin FK). Idempotente. **Aún NO aplicada**.
+- `docker-compose.{dev,prod}.yml`, `deploy.sh`, `.env.{example,dev,prod}` — patrón maxan-auth (dev 3007/5178 + `extra_hosts`; prod red `maxan_shared` + `127.0.0.1:8082:80`; `deploy.sh` con grep, backup, pull ff-only, health check).
+- Build y lint verificados localmente: `tsc -b && vite build` OK, `eslint` OK, `node --check` OK. `docker compose -f docker-compose.dev.yml --env-file .env.dev config` OK.
+
+## Ecosistema
+| Aplicación | URL | Puerto local | Stack |
+|---|---|---|---|
+| ERP | erp.maxansistemas.com | 8084 → 3001 | React 19 + Express 5 + PostgreSQL 16 |
+| Web corporativa | maxansistemas.com | 4000 | React 18 + Vite |
+| Auth (SSO) | auth.maxansistemas.com | 8081 | Node/Express + React |
+| **Tienda (este proyecto)** | **tienda.maxansistemas.com** | **8082** | Node/Express + React |
+| n8n | n8n.maxansistemas.com | 5678 | n8n |
+| Soporte | soporte.maxansistemas.com | 8080 | — |
+| Evolution | evolution.maxansistemas.com | 8083 | Evolution API |
+| Hotelbot | hotelbot.maxansistemas.com | 3005 | — |
+
+## Arquitectura (decisiones acordadas)
+- **El ERP es la única fuente de verdad** de productos e inventario. La tienda solo consume catálogo y genera cotizaciones.
+- **Sin pasarela de pago en el MVP**: el checkout crea una cotización `pendiente`; el asesor la confirma desde el ERP. El stock **nunca bloquea** (disponibilidad informativa).
+- **Desacoplamiento**: `cotizaciones_items` guarda snapshot (sin FK al ERP).
+- **Precios propios** en `tienda.productos_venta` (el ERP no tiene precio maestro). Admin desde ERP o SQL en MVP.
+- **Stock**: `inventable=true` → `SUM(inventario.entradas.cantidad_disponible)`. Sin precio o stock 0 → no se vende.
+- **Webhook a n8n**: POST best-effort a `N8N_WEBHOOK_URL` al crear cotización (`{evento:'cotizacion.creada', cotizacion:{...}}`); vacío = off.
+- **SSO**: identidad vía cookie de auth + JWT compartido (mismo secreto). Restaurar sesión con `GET auth/api/auth/session` (patrón `authSso.ts` de maxan-erp).
+- Capas backend: `routes` → `services` → `repositories` (no escribir SQL en las rutas). Backend en **CommonJS** (como auth).
+
+## Endpoints API (montados; implementar en Fases 2 y 4)
+| Método | Ruta | Auth | Descripción |
+|---|---|---|---|
+| `GET` | `/health` | Público | Healthcheck con BD |
+| `GET` | `/api/catalogo/productos` | Público | Productos en venta + stock informativo |
+| `GET` | `/api/catalogo/productos/:id` | Público | Detalle producto |
+| `GET` | `/api/catalogo/categorias` | Público | Categorías del catálogo |
+| `GET` | `/api/pedidos` | JWT Cliente Tienda | Mis cotizaciones |
+| `POST` | `/api/pedidos` | JWT Cliente Tienda | Crear cotización |
+| `GET` | `/api/pedidos/:id` | JWT Cliente Tienda | Detalle cotización |
+| `POST` | `/api/pedidos/:id/cancelar` | JWT Cliente Tienda | Cancelar pendiente |
+
+## Variables de entorno
+`PORT` (3007; host **8082**), `DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME` (dev `host.docker.internal:5433`; prod `maxan_db:5432`), `JWT_SECRET` (**idéntico a maxan-auth/ERP**, obligatorio en prod), `JWT_EXPIRES_IN`, `CORS_ORIGINS`, `PUBLIC_URL`, `N8N_WEBHOOK_URL`. `config/auth.js` lanza error si `NODE_ENV=production` sin `JWT_SECRET`.
+
+## Modelo de datos
+- Reutiliza schema `usuarios` (identidad vía JWT) e `inventario` (catálogo).
+- Nuevo schema `tienda`: `productos_venta`, `cotizaciones`, `cotizaciones_items` (ver `db/01_tienda.sql`).
+- Referencia ERP: `inventario.productos` (`id, codigo, nombre, categoria, inventariable, unidad_medida`) y stock = `SUM(inventario.entradas.cantidad_disponible)`.
+
+## Docker
+- Dev: `maxan-tienda-backend-dev` (nodemon, bind mount) + `maxan-tienda-frontend-dev` (Vite HMR 5178). Comando: `docker compose -f docker-compose.dev.yml --env-file .env.dev up`.
+- Prod: `maxan-tienda-backend` (expose 3007) + `maxan-tienda-frontend` (`127.0.0.1:8082:80`). Red compartida `maxan_shared` (externa). Comando: `bash deploy.sh`.
+- Backend conecta a la BD por DNS: prod `maxan_db:5432`, dev `host.docker.internal:5433` (extra_hosts).
+
+## Fases
+1. **Infraestructura** — esqueleto backend/frontend, compose, deploy, docs. *(en curso)*
+2. **Catálogo** — repositorio catálogo (productos ERP + precios + stock), endpoints públicos.
+3. **Registro/login SSO** — registro de clientes (rol "Cliente Tienda" vía auth) + restaurar sesión.
+4. **Carrito + checkout** — carrito localStorage, `POST /api/pedidos` genera cotización.
+5. **Webhook n8n** — aviso de cotización (Telegram/CRM).
+6. **Producción** — Caddyfile, CORS auth, aplicar SQL a prod, deploy.
+
+## Próximos pasos (retomar sesión)
+- **Fase 1 terminada en código** (falta versionar). Pendientes:
+  1. Crear repo GitHub `Abenthan/maxan-tienda`, `git init -b main`, commits, rama `develop`, push (auth: `github.com/Abenthan/maxan-auth`).
+  2. Aplicar `db/01_tienda.sql` a `maxan_db_dev` y (al desplegar) a `maxan_db`.
+  3. Fase 2 — catálogo: capa `repositories/catalogo.js` (query inventario + stock + `tienda.productos_venta`), `services/catalogo.js`, controladores, endpoints públicos.
+  4. Fase 3 — SSO: puente a `auth.maxansistemas.com` (`?app=tienda`), registro cliente en auth (reusar `register` de auth), `AuthContext` restaurando sesión.
+  5. maxan-auth: añadir `https://tienda.maxansistemas.com` a CORS prod y `http://localhost:5178` a CORS dev.
+  6. Caddyfile servidor: `tienda.maxansistemas.com → 127.0.0.1:8082`.
+
+## Comandos de desarrollo
+```bash
+# Entorno dev completo
+docker compose -f docker-compose.dev.yml --env-file .env.dev up
+
+# Sin Docker (alternativa)
+cd backend && npm run dev    # nodemon 3007
+cd frontend && npm run dev   # Vite HMR 5178
+
+# Producción
+bash deploy.sh
+
+# Verificación local
+cd backend && node --check src/index.js
+cd frontend && npm run build && npm run lint
+```

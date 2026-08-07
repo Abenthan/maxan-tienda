@@ -1,0 +1,12 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  --color-navy: #0c2c59;
+  --color-brand: #2563eb;
+  --color-whatsapp: #25d366;
+}
+
+body {
+  font-family: var(--font-sans);
+}
