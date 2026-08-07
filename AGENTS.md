@@ -6,7 +6,9 @@ Tienda online del ecosistema Maxan Sistemas en **tienda.maxansistemas.com** (pue
 ## Regla de documentación
 Actualizar **AGENTS.md** y **README.md** conforme avanza el desarrollo.
 
-## Estado actual (Fase 1 — esqueleto funcional)
+## Estado actual (Fase 1 — esqueleto funcional, versionado)
+- **Git**: repo iniciado `git init -b main`; commit inicial `58fc75c` en `main`; rama `develop` creada (apunta al mismo commit). **Push pendiente** hasta crear `github.com/Abenthan/maxan-tienda`.
+- **Verificado**: `node --check` OK, `tsc -b && vite build` OK, `eslint` OK, `docker compose ... config` (dev) OK.
 - `backend/` — Express 5 + `pg` + `jsonwebtoken` + `cors`. `src/index.js` (servidor, `GET /health` con BD, `app.locals.pool`, `trust proxy`), `src/config/{db,auth}.js` (`auth.js` exige `JWT_SECRET` en prod), `src/middleware/auth.js` (`authenticate`/`authorizeRol`, idénticos al ERP), rutas vacías `routes/{catalogo,pedidos}.js`. Puerto interno **3007**. Dockerfile prod (multi-stage no-root, healthcheck `/health`) + Dockerfile.dev (nodemon).
 - `frontend/` — React 19 + Vite 8 + TS 6 + Tailwind 4 + router-dom v7. Solo ruta `/` (placeholder catálogo), `*` → redirect. Tema brand (`--color-navy #0c2c59`, `--color-brand`). Dockerfile prod (nginx) + dev (Vite HMR), `nginx.conf` (proxy `/api/` + `/health` → `tienda-backend:3007`, SPA fallback). Dev en **5178**.
 - `db/01_tienda.sql` — schema `tienda`: `productos_venta` (FK `inventario.productos`), `cotizaciones` (estado `pendiente|confirmada|cancelada`), `cotizaciones_items` (snapshot, sin FK). Idempotente. **Aún NO aplicada**.
@@ -69,8 +71,8 @@ Actualizar **AGENTS.md** y **README.md** conforme avanza el desarrollo.
 6. **Producción** — Caddyfile, CORS auth, aplicar SQL a prod, deploy.
 
 ## Próximos pasos (retomar sesión)
-- **Fase 1 terminada en código** (falta versionar). Pendientes:
-  1. Crear repo GitHub `Abenthan/maxan-tienda`, `git init -b main`, commits, rama `develop`, push (auth: `github.com/Abenthan/maxan-auth`).
+- **Fase 1 terminada y versionada** (`main` `58fc75c`, rama `develop` creada). Pendientes:
+  1. Crear repo GitHub `Abenthan/maxan-tienda` y pushear: `git push -u origin main && git push -u origin develop` (auth: `github.com/Abenthan/maxan-auth`).
   2. Aplicar `db/01_tienda.sql` a `maxan_db_dev` y (al desplegar) a `maxan_db`.
   3. Fase 2 — catálogo: capa `repositories/catalogo.js` (query inventario + stock + `tienda.productos_venta`), `services/catalogo.js`, controladores, endpoints públicos.
   4. Fase 3 — SSO: puente a `auth.maxansistemas.com` (`?app=tienda`), registro cliente en auth (reusar `register` de auth), `AuthContext` restaurando sesión.
