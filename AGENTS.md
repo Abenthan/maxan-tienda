@@ -11,7 +11,7 @@ Actualizar **AGENTS.md** y **README.md** conforme avanza el desarrollo.
 - **Verificado**: `node --check` OK, `tsc -b && vite build` OK, `eslint` OK, `docker compose ... config` (dev) OK.
 - `backend/` — Express 5 + `pg` + `jsonwebtoken` + `cors`. `src/index.js` (servidor, `GET /health` con BD, `app.locals.pool`, `trust proxy`), `src/config/{db,auth}.js` (`auth.js` exige `JWT_SECRET` en prod), `src/middleware/auth.js` (`authenticate`/`authorizeRol`, idénticos al ERP), rutas vacías `routes/{catalogo,pedidos}.js`. Puerto interno **3007**. Dockerfile prod (multi-stage no-root, healthcheck `/health`) + Dockerfile.dev (nodemon).
 - `frontend/` — React 19 + Vite 8 + TS 6 + Tailwind 4 + router-dom v7. Solo ruta `/` (placeholder catálogo), `*` → redirect. Tema brand (`--color-navy #0c2c59`, `--color-brand`). Dockerfile prod (nginx) + dev (Vite HMR), `nginx.conf` (proxy `/api/` + `/health` → `tienda-backend:3007`, SPA fallback). Dev en **5178**.
-- `db/01_tienda.sql` — schema `tienda`: `productos_venta` (FK `inventario.productos`), `cotizaciones` (estado `pendiente|confirmada|cancelada`), `cotizaciones_items` (snapshot, sin FK). Idempotente. **Aún NO aplicada**.
+- Schema `tienda` (centralizado): el archivo `db/01_tienda.sql` fue **eliminado** de este repo; ahora vive en el repositorio compartido `../maxan-db/init/09_tienda.sql` (idempotente, `CREATE SCHEMA IF NOT EXISTS` + `CREATE TABLE IF NOT EXISTS`). Define `tienda.productos_venta` (FK `inventario.productos`), `cotizaciones` (estado `pendiente|confirmada|cancelada`) y `cotizaciones_items` (snapshot, sin FK). **Aún NO aplicada** a la BD; se aplica junto con el resto del init de `maxan-db`.
 - `docker-compose.{dev,prod}.yml`, `deploy.sh`, `.env.{example,dev,prod}` — patrón maxan-auth (dev 3007/5178 + `extra_hosts`; prod red `maxan_shared` + `127.0.0.1:8082:80`; `deploy.sh` con grep, backup, pull ff-only, health check).
 - Build y lint verificados localmente: `tsc -b && vite build` OK, `eslint` OK, `node --check` OK. `docker compose -f docker-compose.dev.yml --env-file .env.dev config` OK.
 
@@ -54,7 +54,7 @@ Actualizar **AGENTS.md** y **README.md** conforme avanza el desarrollo.
 
 ## Modelo de datos
 - Reutiliza schema `usuarios` (identidad vía JWT) e `inventario` (catálogo).
-- Nuevo schema `tienda`: `productos_venta`, `cotizaciones`, `cotizaciones_items` (ver `db/01_tienda.sql`).
+- Nuevo schema `tienda`: `productos_venta`, `cotizaciones`, `cotizaciones_items` (ver `../maxan-db/init/09_tienda.sql`).
 - Referencia ERP: `inventario.productos` (`id, codigo, nombre, categoria, inventariable, unidad_medida`) y stock = `SUM(inventario.entradas.cantidad_disponible)`.
 
 ## Docker
@@ -73,7 +73,7 @@ Actualizar **AGENTS.md** y **README.md** conforme avanza el desarrollo.
 ## Próximos pasos (retomar sesión)
 - **Fase 1 terminada y versionada** (`main` `58fc75c`, rama `develop` creada). Pendientes:
   1. Crear repo GitHub `Abenthan/maxan-tienda` y pushear: `git push -u origin main && git push -u origin develop` (auth: `github.com/Abenthan/maxan-auth`).
-  2. Aplicar `db/01_tienda.sql` a `maxan_db_dev` y (al desplegar) a `maxan_db`.
+  2. Esquema `tienda`: se aplica automáticamente con el init de `maxan-db` (`../maxan-db/init/09_tienda.sql`) al crear el contenedor PostgreSQL; en BD ya existentes ejecutarlo manualmente junto al resto del init.
   3. Fase 2 — catálogo: capa `repositories/catalogo.js` (query inventario + stock + `tienda.productos_venta`), `services/catalogo.js`, controladores, endpoints públicos.
   4. Fase 3 — SSO: puente a `auth.maxansistemas.com` (`?app=tienda`), registro cliente en auth (reusar `register` de auth), `AuthContext` restaurando sesión.
   5. maxan-auth: añadir `https://tienda.maxansistemas.com` a CORS prod y `http://localhost:5178` a CORS dev.
