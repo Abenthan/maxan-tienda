@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Header from '../components/Header'
+import { useCart } from '../context/CartContext'
 import { fetchProductos, fetchCategorias, type Producto, type Categoria } from '../lib/api'
 
 export default function Catalogo() {
@@ -113,6 +114,22 @@ function formatCOP(valor: number) {
 }
 
 function ProductCard({ producto, agotado = false }: { producto: Producto; agotado?: boolean }) {
+  const { add } = useCart()
+
+  function handleAdd(e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (producto.disponible) {
+      add({
+        productoId: producto.id,
+        nombre: producto.nombre,
+        codigo: producto.codigo,
+        precio: producto.precio,
+        unidadMedida: producto.unidadMedida,
+      })
+    }
+  }
+
   return (
     <Link
       to={`/producto/${producto.id}`}
@@ -138,6 +155,14 @@ function ProductCard({ producto, agotado = false }: { producto: Producto; agotad
           <span className="text-xs text-gray-400">{producto.inventariable ? `${producto.stock} en stock` : 'Disponible'}</span>
         )}
       </div>
+      {producto.disponible && (
+        <button
+          onClick={handleAdd}
+          className="mt-4 w-full bg-brand text-white py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"
+        >
+          Agregar
+        </button>
+      )}
     </Link>
   )
 }

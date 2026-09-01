@@ -3,10 +3,10 @@
 Tienda online del ecosistema **Maxan Sistemas** en **tienda.maxansistemas.com** (puerto local **8082**): catálogo de productos + login SSO + carrito + generación de **cotizaciones** (no pagos en línea en el MVP).
 
 ## Estado actual
-**Fases 1 + 2 + 3 — esqueleto + catálogo + login/registro SSO implementados.**
+**Fases 1 a la 4 — esqueleto + catálogo + login/registro SSO + carrito/cotizaciones implementados.**
 
-- `backend/` — Express 5 + `pg` + `jsonwebtoken` + `cors`. `src/index.js` (servidor, `GET /health` con BD, `app.locals.pool`, `trust proxy`), `src/config/{db,auth}.js`, `src/middleware/auth.js` (`authenticate`/`authorizeRol`, idénticos al ERP). **Catálogo implementado** con capas `routes → controllers → services → repositories` (`catalogoRepository`, `catalogoService`, `catalogoController`, `routes/catalogo`). `routes/pedidos.js` pendiente (Fase 4). Puerto interno **3007**.
-- `frontend/` — React 19 + Vite 8 + TS 6 + Tailwind CSS 4 + react-router-dom v7. **Catálogo funcional** + **SSO**: `lib/api.ts` (axios con interceptor JWT/401), `lib/authSso.ts` + `context/AuthContext.tsx` (patrón SSO del ERP: registro/login delegan a auth, token por `?token=` y validado con `/auth/me`), `components/Header.tsx` (identidad + login/registro). Páginas `pages/Catalogo.tsx` y `pages/ProductoDetalle.tsx` (`/producto/:id`). Dev en **5178**, proxy `/auth-sso` → backend auth.
+- `backend/` — Express 5 + `pg` + `jsonwebtoken` + `cors`. `src/index.js` (servidor, `GET /health` con BD, `app.locals.pool`, `trust proxy`), `src/config/{db,auth}.js`, `src/middleware/auth.js` (`authenticate`/`authorizeRol`, idénticos al ERP). **Catálogo implementado** con capas `routes → controllers → services → repositories` (`catalogoRepository`, `catalogoService`, `catalogoController`, `routes/catalogo`). **Pedidos/cotizaciones implementados** (Fase 4) con el mismo patrón + `authenticate` + `authorizeRol("Cliente Tienda")` (`pedidosRepository` con transacción, `pedidosService` validando items contra el catálogo, `routes/pedidos`). Puerto interno **3007**.
+- `frontend/` — React 19 + Vite 8 + TS 6 + Tailwind CSS 4 + react-router-dom v7. **Catálogo + SSO + carrito/checkout**: `lib/api.ts` (axios con interceptor JWT/401), `lib/authSso.ts` + `context/AuthContext.tsx` (SSO del ERP), `context/CartContext.tsx` (carrito localStorage), `components/Header.tsx` (identidad + icono carrito con contador). Páginas `pages/Catalogo.tsx`, `pages/ProductoDetalle.tsx` (botón "Agregar al carrito") y `pages/Carrito.tsx` (checkout → `POST /api/pedidos`). Dev en **5178**, proxy `/auth-sso` → backend auth.
 - Schema `tienda` — centralizado en el repo `maxan-db` (`../maxan-db/init/09_tienda.sql`); **aplicado a `maxan_db_dev`** con 14 `productos_venta` de prueba. Ya no hay `db/` en este repo.
 - `docker-compose.{dev,prod}.yml`, `deploy.sh`, `.env.{example,dev,prod}` — patrón endurecido de maxan-auth.
 
@@ -53,11 +53,11 @@ La BD es la del ERP dev (`maxan_db_dev`, puerto host **5433**). El `JWT_SECRET` 
 | `GET` | `/api/catalogo/productos/:id` | Público | Detalle producto |
 | `GET` | `/api/catalogo/categorias` | Público | Categorías del catálogo |
 | `GET` | `/api/pedidos` | JWT Cliente Tienda | Mis cotizaciones |
-| `POST` | `/api/pedidos` | JWT Cliente Tienda | Crear cotización desde el carrito |
-| `GET` | `/api/pedidos/:id` | JWT Cliente Tienda | Detalle cotización |
-| `POST` | `/api/pedidos/:id/cancelar` | JWT Cliente Tienda | Cancelar cotización pendiente |
+| `POST` | `/api/pedidos` | JWT Cliente Tienda | Crear cotización desde el carrito (estado `pendiente`) |
+| `GET` | `/api/pedidos/:id` | JWT Cliente Tienda | Detalle cotización con items |
+| `POST` | `/api/pedidos/:id/cancelar` | JWT Cliente Tienda | Cancelar cotización pendiente (409 si no) |
 
-> **Catálogo implementado** en `routes/catalogo.js` (consume `catalogoService`). Los endpoints de `routes/pedidos.js` se implementan en Fase 4.
+> **Catálogo y pedidos implementados**. El catálogo vive en `routes/catalogo.js` (consume `catalogoService`); los pedidos en `routes/pedidos.js` (protegidos con `authenticate` + `authorizeRol("Cliente Tienda")`, consumen `pedidosService`). El webhook a n8n se implementa en Fase 5.
 
 ## Modelo de datos (schema `tienda`)
 - `productos_venta` — precio y visibilidad por `producto_id` (FK a `inventario.productos`).
@@ -79,13 +79,13 @@ El ERP referencia: `inventario.productos` (`id, codigo, nombre, categoria, inven
 1. **Infraestructura** — esqueleto backend/frontend, compose, deploy, docs. *✅ completada*
 2. **Catálogo** — repositorio que lee `inventario.productos` + stock + `productos_venta`; endpoints públicos. *✅ completada*
 3. **Registro/login SSO** — registro de clientes ("Cliente Tienda" vía auth) + restaurar sesión. *✅ completada*
-4. **Carrito + checkout** — carrito localStorage, POST `/api/pedidos` genera cotización.
+4. **Carrito + checkout** — carrito localStorage, POST `/api/pedidos` genera cotización. *✅ completada*
 5. **Webhook n8n** — aviso de cotización (Telegram/CRM).
 6. **Producción** — Caddyfile (`tienda.maxansistemas.com → 8082`), CORS de auth += `https://tienda.maxansistemas.com`, deploy.
 
 ## Pendientes
 - Schema `tienda`: ya aplicado a `maxan_db_dev` (con 14 `productos_venta` de prueba). En producción (`maxan_db`) aplicarlo junto al init de `maxan-db`.
 - maxan-auth: CORS prod += `https://tienda.maxansistemas.com` (dev `http://localhost:5178` ya añadido).
-- Validar el flujo SSO en navegador (redirección con `?token=` y restauración de sesión) una vez integrado con auth dev.
+- Validar en navegador el flujo completo: agregar al carrito → checkout → confirmación (con un cliente autenticado).
+- Fase 5 — webhook a n8n (`N8N_WEBHOOK_URL`) al crear cotización.
 - Caddyfile servidor: añadir `tienda.maxansistemas.com → 127.0.0.1:8082`.
-- Fase 4 — pedidos (`routes/pedidos.js`, repositorios, carrito en frontend).

@@ -1,10 +1,15 @@
 const express = require("express");
+const { authenticate, authorizeRol } = require("../middleware/auth");
+const controller = require("../controllers/pedidosController");
+
 const router = express.Router();
 
-// Fase 3: implementar con authenticate + authorizeRol("Cliente Tienda") + servicios
-router.get("/", (req, res) => res.json([]));
-router.post("/", (req, res) => res.status(501).json({ error: "No implementado" }));
-router.get("/:id", (req, res) => res.status(404).json({ error: "No implementado" }));
-router.post("/:id/cancelar", (req, res) => res.status(501).json({ error: "No implementado" }));
+// Solo clientes autenticados de la tienda (rol "Cliente Tienda").
+router.use(authenticate, authorizeRol("Cliente Tienda"));
+
+router.get("/", controller.listar);
+router.post("/", controller.crear);
+router.get("/:id", controller.obtener);
+router.post("/:id/cancelar", controller.cancelar);
 
 module.exports = router;

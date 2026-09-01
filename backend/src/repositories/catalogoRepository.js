@@ -14,6 +14,7 @@ const SELECT_PRODUCTOS = `
     pv.precio,
     pv.destacado,
     pv.descripcion,
+    pv.activo,
     COALESCE(vs.stock_actual, 0)::numeric AS stock
   FROM tienda.productos_venta pv
   JOIN inventario.productos p ON p.id = pv.producto_id

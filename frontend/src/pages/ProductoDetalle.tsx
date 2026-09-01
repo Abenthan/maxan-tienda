@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import Header from '../components/Header'
+import { useCart } from '../context/CartContext'
 import { fetchProducto, type Producto } from '../lib/api'
 
 export default function ProductoDetalle() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+  const { add } = useCart()
   const [producto, setProducto] = useState<Producto | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [added, setAdded] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -82,9 +86,37 @@ export default function ProductoDetalle() {
             )}
 
             <div className="mt-10">
-              <span className="inline-block bg-brand/10 text-brand px-6 py-3 rounded-lg font-semibold">
-                La cotización en línea estará disponible próximamente
-              </span>
+              {producto.disponible ? (
+                <div className="flex items-center gap-3 flex-wrap">
+                  <button
+                    onClick={() => {
+                      add({
+                        productoId: producto.id,
+                        nombre: producto.nombre,
+                        codigo: producto.codigo,
+                        precio: producto.precio,
+                        unidadMedida: producto.unidadMedida,
+                      })
+                      setAdded(true)
+                    }}
+                    className="bg-brand text-white px-6 py-3 rounded-lg font-semibold hover:opacity-90 transition-opacity"
+                  >
+                    Agregar al carrito
+                  </button>
+                  {added && (
+                    <button
+                      onClick={() => navigate('/carrito')}
+                      className="px-6 py-3 rounded-lg font-semibold text-brand hover:underline"
+                    >
+                      Ver carrito →
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <span className="inline-block bg-gray-100 text-gray-500 px-6 py-3 rounded-lg">
+                  Producto no disponible para cotización
+                </span>
+              )}
             </div>
           </div>
         )}
