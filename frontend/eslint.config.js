@@ -19,4 +19,13 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    // Providers de contexto + hooks de uso (patrón estándar de react-refresh):
+    // un archivo de contexto exporta el Provider y su useXxxHook, lo que rompe
+    // la regla only-export-components. Se permite expresamente para context/.
+    files: ['**/context/*.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 ])

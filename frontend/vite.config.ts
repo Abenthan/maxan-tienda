@@ -6,6 +6,7 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const apiProxy = env.VITE_API_PROXY || 'http://tienda-backend:3007'
+  const authSso = env.VITE_AUTH_SSO_PROXY || 'http://host.docker.internal:3006'
 
   return {
     plugins: [react(), tailwindcss()],
@@ -16,6 +17,11 @@ export default defineConfig(({ mode }) => {
       proxy: {
         '/api': apiProxy,
         '/health': apiProxy,
+        '/auth-sso': {
+          target: authSso,
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/auth-sso/, ''),
+        },
       },
     },
   }

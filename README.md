@@ -3,10 +3,10 @@
 Tienda online del ecosistema **Maxan Sistemas** en **tienda.maxansistemas.com** (puerto local **8082**): catálogo de productos + login SSO + carrito + generación de **cotizaciones** (no pagos en línea en el MVP).
 
 ## Estado actual
-**Fases 1 + 2 — esqueleto funcional + catálogo implementado.**
+**Fases 1 + 2 + 3 — esqueleto + catálogo + login/registro SSO implementados.**
 
 - `backend/` — Express 5 + `pg` + `jsonwebtoken` + `cors`. `src/index.js` (servidor, `GET /health` con BD, `app.locals.pool`, `trust proxy`), `src/config/{db,auth}.js`, `src/middleware/auth.js` (`authenticate`/`authorizeRol`, idénticos al ERP). **Catálogo implementado** con capas `routes → controllers → services → repositories` (`catalogoRepository`, `catalogoService`, `catalogoController`, `routes/catalogo`). `routes/pedidos.js` pendiente (Fase 4). Puerto interno **3007**.
-- `frontend/` — React 19 + Vite 8 + TS 6 + Tailwind CSS 4 + react-router-dom v7. **Catálogo funcional**: `lib/api.ts` (axios + tipos), `pages/Catalogo.tsx` (grid con filtro por categoría), `pages/ProductoDetalle.tsx` (`/producto/:id`). Dev en **5178**.
+- `frontend/` — React 19 + Vite 8 + TS 6 + Tailwind CSS 4 + react-router-dom v7. **Catálogo funcional** + **SSO**: `lib/api.ts` (axios con interceptor JWT/401), `lib/authSso.ts` + `context/AuthContext.tsx` (patrón SSO del ERP: registro/login delegan a auth, token por `?token=` y validado con `/auth/me`), `components/Header.tsx` (identidad + login/registro). Páginas `pages/Catalogo.tsx` y `pages/ProductoDetalle.tsx` (`/producto/:id`). Dev en **5178**, proxy `/auth-sso` → backend auth.
 - Schema `tienda` — centralizado en el repo `maxan-db` (`../maxan-db/init/09_tienda.sql`); **aplicado a `maxan_db_dev`** con 14 `productos_venta` de prueba. Ya no hay `db/` en este repo.
 - `docker-compose.{dev,prod}.yml`, `deploy.sh`, `.env.{example,dev,prod}` — patrón endurecido de maxan-auth.
 
@@ -39,10 +39,11 @@ La BD es la del ERP dev (`maxan_db_dev`, puerto host **5433**). El `JWT_SECRET` 
 - **Sesiones**: identidad vía cookie de sesión de auth + JWT (mismo secreto) para llamadas autenticadas.
 
 ### Flujo SSO (reutiliza el patrón de maxan-erp)
-1. Sin sesión → redirige a `auth.maxansistemas.com/login?app=tienda&redirect=...` (o `/register` para clientes nuevos).
-2. Auth setea cookie de sesión y redirige de vuelta.
-3. La tienda restaura la sesión vía `GET auth/api/auth/session` con `credentials: include` → JWT + perfil; lo guarda en localStorage.
-4. API de la tienda valida el JWT con su middleware `authenticate`.
+1. Sin sesión → redirige a `auth.maxansistemas.com/login?app=tienda&redirect=...` (o `/register` para clientes nuevos). El registro crea el cliente con rol **"Cliente Tienda"** en auth.
+2. Auth valida/crea la sesión y redirige de vuelta con `?token=<jwt>`.
+3. `AuthContext` captura el token de la URL (o de la cookie vía `GET /auth/session`), lo guarda en localStorage y lo valida con `GET /auth/me`.
+4. Cada llamada a la API de la tienda va con `Authorization: Bearer <jwt>`; la valida su middleware `authenticate`; un 401 limpia la sesión y redirige a auth (si está delegado).
+- Dev: el frontend proxya `/auth-sso` → backend de auth (definible con `VITE_AUTH_SSO_PROXY`; en contenedor usar `host.docker.internal:3006`).
 
 ## Endpoints API
 | Método | Ruta | Auth | Descripción |
@@ -66,7 +67,8 @@ La BD es la del ERP dev (`maxan_db_dev`, puerto host **5433**). El `JWT_SECRET` 
 El ERP referencia: `inventario.productos` (`id, codigo, nombre, categoria, inventariable, unidad_medida`). El stock informativo se obtiene de la vista `inventario.vw_stock_disponible` (join por `producto_id`).
 
 ## Variables de entorno
-`PORT` (3007; host **8082** vía compose/Caddy), `DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME` (dev: `host.docker.internal:5433`; prod: `maxan_db:5432`), `JWT_SECRET` (**idéntico al de maxan-auth/ERP**, obligatorio en prod), `JWT_EXPIRES_IN`, `CORS_ORIGINS`, `PUBLIC_URL`, `N8N_WEBHOOK_URL`.
+- **Backend**: `PORT` (3007; host **8082** vía compose/Caddy), `DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME` (dev: `host.docker.internal:5433`; prod: `maxan_db:5432`), `JWT_SECRET` (**idéntico al de maxan-auth/ERP**, obligatorio en prod), `JWT_EXPIRES_IN`, `CORS_ORIGINS`, `PUBLIC_URL`, `N8N_WEBHOOK_URL`.
+- **Frontend** (en dev Vite las lee de `frontend/.env.development`): `VITE_AUTH_DELEGATED` (SSO activo), `VITE_AUTH_URL` (URL pública de auth), `VITE_API_PROXY` y `VITE_AUTH_SSO_PROXY` (proxy dev de Vite).
 
 ## Infra
 - Compose prod: `tienda-backend` (expose 3007) + `tienda-frontend` (`127.0.0.1:8082:80`, nginx proxy `/api/` y `/health` → `tienda-backend:3007`). Red `maxan_shared` externa.
@@ -76,13 +78,14 @@ El ERP referencia: `inventario.productos` (`id, codigo, nombre, categoria, inven
 ## Fases
 1. **Infraestructura** — esqueleto backend/frontend, compose, deploy, docs. *✅ completada*
 2. **Catálogo** — repositorio que lee `inventario.productos` + stock + `productos_venta`; endpoints públicos. *✅ completada*
-3. **Registro/login SSO** — registro de clientes ("Cliente Tienda" vía auth) + restaurar sesión.
+3. **Registro/login SSO** — registro de clientes ("Cliente Tienda" vía auth) + restaurar sesión. *✅ completada*
 4. **Carrito + checkout** — carrito localStorage, POST `/api/pedidos` genera cotización.
 5. **Webhook n8n** — aviso de cotización (Telegram/CRM).
 6. **Producción** — Caddyfile (`tienda.maxansistemas.com → 8082`), CORS de auth += `https://tienda.maxansistemas.com`, deploy.
 
 ## Pendientes
 - Schema `tienda`: ya aplicado a `maxan_db_dev` (con 14 `productos_venta` de prueba). En producción (`maxan_db`) aplicarlo junto al init de `maxan-db`.
-- Crear repositorio GitHub `Abenthan/maxan-tienda` y pushear `main` + `develop`.
+- maxan-auth: CORS prod += `https://tienda.maxansistemas.com` (dev `http://localhost:5178` ya añadido).
+- Validar el flujo SSO en navegador (redirección con `?token=` y restauración de sesión) una vez integrado con auth dev.
 - Caddyfile servidor: añadir `tienda.maxansistemas.com → 127.0.0.1:8082`.
-- maxan-auth: CORS prod += `https://tienda.maxansistemas.com`; CORS dev += `http://localhost:5178`.
+- Fase 4 — pedidos (`routes/pedidos.js`, repositorios, carrito en frontend).

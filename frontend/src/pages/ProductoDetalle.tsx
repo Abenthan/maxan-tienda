@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import Header from '../components/Header'
 import { fetchProducto, type Producto } from '../lib/api'
 
 export default function ProductoDetalle() {
@@ -27,12 +28,7 @@ export default function ProductoDetalle() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <header className="bg-navy text-white">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-          <span className="font-bold text-lg">Tienda Maxan</span>
-          <span className="text-sm text-white/70">Maxan Sistemas</span>
-        </div>
-      </header>
+      <Header />
 
       <main className="max-w-4xl mx-auto px-4 py-10 flex-1 w-full">
         <Link to="/" className="text-sm text-brand hover:underline">

@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { AUTH_DELEGATED, redirectToAuthLogin } from './authSso'
 
 export interface Producto {
   id: number
@@ -18,7 +19,29 @@ export type Categoria = string
 
 const api = axios.create({
   baseURL: '/api',
+  withCredentials: true,
 })
+
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token')
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
+
+api.interceptors.response.use(
+  (res) => res,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token')
+      if (AUTH_DELEGATED) {
+        redirectToAuthLogin(window.location.origin + window.location.pathname + window.location.search)
+      }
+    }
+    return Promise.reject(error)
+  },
+)
 
 export async function fetchProductos(): Promise<Producto[]> {
   const { data } = await api.get<Producto[]>('/catalogo/productos')

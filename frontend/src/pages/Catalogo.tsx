@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import Header from '../components/Header'
 import { fetchProductos, fetchCategorias, type Producto, type Categoria } from '../lib/api'
 
 export default function Catalogo() {
@@ -36,12 +37,7 @@ export default function Catalogo() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <header className="bg-navy text-white">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-          <span className="font-bold text-lg">Tienda Maxan</span>
-          <span className="text-sm text-white/70">Maxan Sistemas</span>
-        </div>
-      </header>
+      <Header />
 
       <main className="max-w-6xl mx-auto px-4 py-10 flex-1 w-full">
         <div className="mb-8">

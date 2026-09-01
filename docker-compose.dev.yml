@@ -35,6 +35,8 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "127.0.0.1:5178:5178"
     depends_on:
