@@ -12,3 +12,7 @@ backend/dist/
 
 # opencode
 .opencode/
+
+# Herramientas de agentes (locales, no se versionan)
+.agents/
+skills-lock.json
