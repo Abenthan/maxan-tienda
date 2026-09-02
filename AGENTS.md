@@ -61,8 +61,8 @@ Actualizar **AGENTS.md** y **README.md** conforme avanza el desarrollo.
 | Método | Ruta | Auth | Descripción |
 |---|---|---|---|
 | `GET` | `/health` | Público | Healthcheck con BD |
-| `GET` | `/api/catalogo/productos` | Público | **Implementado** — productos en venta + stock informativo |
-| `GET` | `/api/catalogo/productos/:id` | Público | **Implementado** — detalle producto |
+| `GET` | `/api/catalogo/productos` | Público | **Implementado** — productos en venta + stock + `imagenPrincipal` (URL de R2) |
+| `GET` | `/api/catalogo/productos/:id` | Público | **Implementado** — detalle producto + `imagenes[]` (todas las fotos ordenadas) |
 | `GET` | `/api/catalogo/categorias` | Público | **Implementado** — categorías del catálogo |
 | `GET` | `/api/pedidos` | JWT Cliente Tienda | **Implementado** — mis cotizaciones |
 | `POST` | `/api/pedidos` | JWT Cliente Tienda | **Implementado** — crear cotización (estado `pendiente`) |
@@ -74,9 +74,10 @@ Actualizar **AGENTS.md** y **README.md** conforme avanza el desarrollo.
 - **Frontend** (dev lo lee Vite de `frontend/.env.development`): `VITE_AUTH_DELEGATED=true` (SSO activo), `VITE_AUTH_URL` (URL pública de auth: dev `http://localhost:5175`, prod `https://auth.maxansistemas.com`), `VITE_API_PROXY` y `VITE_AUTH_SSO_PROXY` (solo usados por el proxy de Vite en dev; en contenedor usar `host.docker.internal`).
 
 ## Modelo de datos
-- Reutiliza schema `usuarios` (identidad vía JWT) e `inventario` (catálogo).
+- Reutiliza schema `usuarios` (identidad vía JWT) e `inventario` (catálogo + **`inventario.imagenes`** para fotos de productos).
 - Nuevo schema `tienda`: `productos_venta`, `cotizaciones`, `cotizaciones_items` (ver `../maxan-db/init/09_tienda.sql`).
 - Referencia ERP: `inventario.productos` (`id, codigo, nombre, categoria, inventariable, unidad_medida`) y stock = `SUM(inventario.entradas.cantidad_disponible)`.
+- **Imágenes**: tabla `inventario.imagenes` (id, producto_id FK→productos ON DELETE CASCADE, url, es_principal, orden, created_at). Imágenes almacenadas en Cloudflare R2 (bucket `maxan-erp`), la BD solo guarda URLs. La tienda hace LEFT JOIN LATERAL para obtener la imagen principal en el listado, y carga todas en el detalle.
 
 ## Docker
 - Dev: `maxan-tienda-backend-dev` (nodemon, bind mount) + `maxan-tienda-frontend-dev` (Vite HMR 5178, con `extra_hosts: host.docker.internal` para el proxy `/auth-sso`). Comando: `docker compose -f docker-compose.dev.yml --env-file .env.dev up`.

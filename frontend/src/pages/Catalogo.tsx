@@ -133,36 +133,50 @@ function ProductCard({ producto, agotado = false }: { producto: Producto; agotad
   return (
     <Link
       to={`/producto/${producto.id}`}
-      className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg hover:border-navy/30 transition-shadow"
+      className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg hover:border-navy/30 transition-shadow"
     >
-      <div className="flex items-start justify-between gap-2">
-        <span className="inline-block bg-gray-100 text-gray-500 text-xs font-medium px-2 py-1 rounded">
-          {producto.categoria || 'Sin categoría'}
-        </span>
-        {producto.destacado && (
-          <span className="inline-block bg-brand/10 text-brand text-xs font-semibold px-2 py-1 rounded">
-            Destacado
-          </span>
-        )}
-      </div>
-      <h2 className="mt-4 font-semibold text-navy">{producto.nombre}</h2>
-      {producto.descripcion && <p className="mt-2 text-sm text-gray-500 line-clamp-2">{producto.descripcion}</p>}
-      <div className="mt-4 flex items-end justify-between">
-        <span className="text-lg font-bold text-navy">{formatCOP(producto.precio)}</span>
-        {agotado ? (
-          <span className="text-xs text-red-500 font-medium">Agotado</span>
-        ) : (
-          <span className="text-xs text-gray-400">{producto.inventariable ? `${producto.stock} en stock` : 'Disponible'}</span>
-        )}
-      </div>
-      {producto.disponible && (
-        <button
-          onClick={handleAdd}
-          className="mt-4 w-full bg-brand text-white py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"
-        >
-          Agregar
-        </button>
+      {producto.imagenPrincipal ? (
+        <img
+          src={producto.imagenPrincipal}
+          alt={producto.nombre}
+          loading="lazy"
+          className="w-full h-48 object-cover"
+        />
+      ) : (
+        <div className="w-full h-48 bg-gray-100 flex items-center justify-center">
+          <span className="text-4xl text-gray-300">📦</span>
+        </div>
       )}
+      <div className="p-6">
+        <div className="flex items-start justify-between gap-2">
+          <span className="inline-block bg-gray-100 text-gray-500 text-xs font-medium px-2 py-1 rounded">
+            {producto.categoria || 'Sin categoría'}
+          </span>
+          {producto.destacado && (
+            <span className="inline-block bg-brand/10 text-brand text-xs font-semibold px-2 py-1 rounded">
+              Destacado
+            </span>
+          )}
+        </div>
+        <h2 className="mt-4 font-semibold text-navy">{producto.nombre}</h2>
+        {producto.descripcion && <p className="mt-2 text-sm text-gray-500 line-clamp-2">{producto.descripcion}</p>}
+        <div className="mt-4 flex items-end justify-between">
+          <span className="text-lg font-bold text-navy">{formatCOP(producto.precio)}</span>
+          {agotado ? (
+            <span className="text-xs text-red-500 font-medium">Agotado</span>
+          ) : (
+            <span className="text-xs text-gray-400">{producto.inventariable ? `${producto.stock} en stock` : 'Disponible'}</span>
+          )}
+        </div>
+        {producto.disponible && (
+          <button
+            onClick={handleAdd}
+            className="mt-4 w-full bg-brand text-white py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"
+          >
+            Agregar
+          </button>
+        )}
+      </div>
     </Link>
   )
 }

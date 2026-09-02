@@ -15,10 +15,16 @@ const SELECT_PRODUCTOS = `
     pv.destacado,
     pv.descripcion,
     pv.activo,
-    COALESCE(vs.stock_actual, 0)::numeric AS stock
+    COALESCE(vs.stock_actual, 0)::numeric AS stock,
+    img.url AS imagen_principal
   FROM tienda.productos_venta pv
   JOIN inventario.productos p ON p.id = pv.producto_id
   LEFT JOIN inventario.vw_stock_disponible vs ON vs.producto_id = p.id
+  LEFT JOIN LATERAL (
+    SELECT url FROM inventario.imagenes
+    WHERE producto_id = p.id AND es_principal = TRUE
+    LIMIT 1
+  ) img ON TRUE
 `;
 
 async function listar() {
@@ -39,6 +45,17 @@ async function obtenerPorId(id) {
   return rows[0] || null;
 }
 
+async function obtenerImagenes(productoId) {
+  const { rows } = await pool.query(
+    `SELECT id, url, es_principal, orden
+     FROM inventario.imagenes
+     WHERE producto_id = $1
+     ORDER BY es_principal DESC, orden ASC`,
+    [productoId]
+  );
+  return rows;
+}
+
 async function categorias() {
   const { rows } = await pool.query(
     `SELECT DISTINCT categoria
@@ -49,4 +66,4 @@ async function categorias() {
   return rows.map((r) => r.categoria);
 }
 
-module.exports = { listar, obtenerPorId, categorias };
+module.exports = { listar, obtenerPorId, obtenerImagenes, categorias };

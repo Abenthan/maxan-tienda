@@ -13,6 +13,8 @@ export interface Producto {
   descripcion: string | null
   stock: number
   disponible: boolean
+  imagenPrincipal: string | null
+  imagenes?: { url: string; esPrincipal: boolean; orden: number }[]
 }
 
 export type Categoria = string

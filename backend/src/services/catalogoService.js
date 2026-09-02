@@ -19,6 +19,7 @@ function toProducto(row) {
     descripcion: row.descripcion,
     stock,
     disponible: precio > 0 && (!inventariable || stock > 0),
+    imagenPrincipal: row.imagen_principal || null,
   };
 }
 
@@ -29,7 +30,16 @@ async function listar() {
 
 async function obtenerPorId(id) {
   const row = await catalogoRepository.obtenerPorId(id);
-  return row ? toProducto(row) : null;
+  if (!row) return null;
+  const producto = toProducto(row);
+  // Cargar todas las imágenes para el detalle
+  const imagenes = await catalogoRepository.obtenerImagenes(id);
+  producto.imagenes = imagenes.map((img) => ({
+    url: img.url,
+    esPrincipal: img.es_principal,
+    orden: img.orden,
+  }));
+  return producto;
 }
 
 async function categorias() {
