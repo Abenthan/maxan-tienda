@@ -96,14 +96,99 @@ Actualizar **AGENTS.md** y **README.md** conforme avanza el desarrollo.
 6. **Producción** — Caddyfile, CORS auth, aplicar SQL a prod, deploy. *🔄 en curso — repo preparado (`.env.production`); faltan pasos de servidor.*
 
 ## Próximos pasos (retomar sesión)
-- **Fase 6 (producción) en curso — repo preparado (2026-10-15)**:
+- **HANDOFF (cierre de sesión 2026-10-15)**:
+  - Git `maxan-tienda` `main` → último commit `a0cfa7c` (`.env.production` + docs). Git `maxan-db` `main` → `9d5daf7` (migración `26_imagenes_producto.sql` **ya pusheada**, antes no estaba).
+  - **Repo listo para desplegar**. Siguiente acción: ejecutar el **Playbook de despliegue (Fase 6)** de abajo, en orden, en el servidor. Tras cada bloque pegar la salida para depurar si falla.
+  - Recordatorio crítico: **verificar `inventario.imagenes` en `maxan_db` antes del deploy** (si falta, el catálogo rompe).
+- **Fase 6 (producción) — repo preparado (2026-10-15)**:
   - ✅ `frontend/.env.production` creado y versionado (`VITE_AUTH_DELEGATED=true`, `VITE_AUTH_URL=https://auth.maxansistemas.com`); verificado en `dist/` que el build de prod compila el SSO activo; `tsc -b && vite build` + `eslint` OK.
-  - ⬜ **Servidor** (manual): (a) DNS `tienda.maxansistemas.com`; (b) Caddyfile `tienda.maxansistemas.com → reverse_proxy 127.0.0.1:8082` + reload; (c) completar `~/maxan-tienda/.env.prod` (`DB_USER/DB_PASSWORD/DB_NAME` + `JWT_SECRET` idéntico a ERP/auth); (d) maxan-auth `.env.prod`: `CORS_ORIGINS += https://tienda.maxansistemas.com` y recrear backend; (e) aplicar `maxan-db/init/09_tienda.sql` a `maxan_db`, **verificar `inventario.imagenes` y `vw_stock_disponible`**, y sembrar `tienda.productos_venta` reales; (f) `cd ~/maxan-tienda && bash deploy.sh`.
+  - ⬜ **Servidor**: ver Playbook de despliegue (Fase 6) más abajo.
   - ⬜ Verificación post-deploy: `/health` vía 8082 → catálogo con imágenes → login SSO (`?token`) → crear cotización → verla por SQL en `tienda.cotizaciones`.
 - **Dev verificado SIN Docker (2026-09-05)**: `cd backend && npm run dev` (3007) + `cd frontend && npm run dev` (5178) funciona punta a punta tras crear `backend/.env` y apuntar `frontend/.env.development` a `localhost`. Catálogo (productos/categorías) **200**, SSO `/auth-sso` a auth (`localhost:3006`) **200**, imágenes R2 públicas cargando.
 - **Fase 4 (pedidos/cotizaciones) completada y verificada** en Docker dev: crear/listar/detalle/cancelar (401/403/400/409 OK), con validación de items contra el catálogo. Pendientes:
   1. Validar el flujo completo en navegador (agregar al carrito → checkout → confirmación) con un cliente autenticado.
   2. Fase 5 — webhook a n8n: POST best-effort a `N8N_WEBHOOK_URL` al crear cotización (`{evento:'cotizacion.creada', cotizacion:{...}}`).
+
+## Playbook de despliegue a producción (Fase 6) — comandos de servidor
+> Marcar `[ ]` → `[x]` conforme se completen. Orden recomendado; no requiere reiniciar el ERP.
+
+### [ ] 1. DNS
+Crear en Cloudflare el registro A `tienda` → IP del servidor. Verificar:
+```bash
+dig +short tienda.maxansistemas.com
+```
+
+### [ ] 2. Caddyfile
+Añadir al final de `/etc/caddy/Caddyfile`:
+```
+tienda.maxansistemas.com {
+    reverse_proxy 127.0.0.1:8082 {
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Forwarded-Host  {host}
+        header_up X-Real-IP         {remote_host}
+    }
+}
+```
+```bash
+sudo caddy validate --config /etc/caddy/Caddyfile && sudo systemctl reload caddy
+```
+
+### [ ] 3. `~/maxan-tienda/.env.prod` (completar)
+`DB_USER`, `DB_PASSWORD`, `DB_NAME` y `JWT_SECRET` (idéntico a ERP/auth). `DB_HOST=maxan_db`, `DB_PORT=5432`, `CORS_ORIGINS`/`PUBLIC_URL` ya en `https://tienda.maxansistemas.com`.
+```bash
+cd ~/maxan-tienda
+grep -E '^(DB_USER|DB_PASSWORD|DB_NAME|JWT_SECRET)=' ~/maxan-erp/.env
+nano .env.prod
+```
+
+### [ ] 4. CORS en maxan-auth prod
+Añadir `,https://tienda.maxansistemas.com` al final de `CORS_ORIGINS` en `~/maxan-auth/.env.prod` y recrear el backend:
+```bash
+cd ~/maxan-auth
+nano .env.prod
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --force-recreate auth-backend
+curl -fsS https://auth.maxansistemas.com/health
+```
+
+### [ ] 5. BD prod (`maxan_db`) — antes del deploy
+```bash
+cd ~/maxan-tienda
+DBU=$(grep -E '^DB_USER=' .env.prod | cut -d= -f2- | tr -d '"')
+DBN=$(grep -E '^DB_NAME=' .env.prod | cut -d= -f2- | tr -d '"')
+# 5a. Migración de imágenes (¡bloqueante para el catálogo!)
+curl -fsSL https://raw.githubusercontent.com/Abenthan/maxan-db/main/26_imagenes_producto.sql | docker exec -i maxan_db psql -U "$DBU" -d "$DBN"
+# 5b. Schema tienda
+curl -fsSL https://raw.githubusercontent.com/Abenthan/maxan-db/main/init/09_tienda.sql | docker exec -i maxan_db psql -U "$DBU" -d "$DBN"
+# 5c. Verificar dependencias (si faltan imagenes/vw_stock_disponible, NO desplegar)
+docker exec -it maxan_db psql -U "$DBU" -d "$DBN" -c "\dt inventario.imagenes" -c "\dv inventario.vw_stock_disponible" -c "\dt tienda.*"
+```
+> `inventario.imagenes` es **obligatoria**: `catalogoRepository.js` la usa en un `LEFT JOIN LATERAL`; si no existe, el catálogo devuelve error.
+
+### [ ] 6. Sembrar `tienda.productos_venta` (precios reales)
+```bash
+docker exec -it maxan_db psql -U "$DBU" -d "$DBN"
+```
+```sql
+INSERT INTO tienda.productos_venta (producto_id, precio, activo, destacado, descripcion)
+SELECT p.id, 0.00, TRUE, FALSE, NULL
+FROM inventario.productos p
+WHERE NOT EXISTS (SELECT 1 FROM tienda.productos_venta pv WHERE pv.producto_id = p.id);
+-- UPDATE tienda.productos_venta SET precio=... WHERE producto_id=...; activo=FALSE para los no vendibles
+SELECT count(*) FROM tienda.productos_venta WHERE activo;
+```
+
+### [ ] 7. Deploy
+```bash
+cd ~/maxan-tienda && bash deploy.sh
+```
+
+### [ ] 8. Verificación post-deploy
+```bash
+curl -fsS http://127.0.0.1:8082/health
+curl -fsS https://tienda.maxansistemas.com/api/catalogo/productos | head -c 400
+docker exec -it maxan_db psql -U "$DBU" -d "$DBN" -c "SELECT id,usuario_id,estado,created_at FROM tienda.cotizaciones ORDER BY id DESC LIMIT 3;"
+```
+Navegador: catálogo con imágenes → login SSO → carrito → checkout → confirmación.
 
 ## Comandos de desarrollo
 ```bash
