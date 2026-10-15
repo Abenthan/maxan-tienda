@@ -30,8 +30,9 @@ Actualizar **AGENTS.md** y **README.md** conforme avanza el desarrollo.
   - `src/pages/ProductoDetalle.tsx` — ruta `/producto/:id` con detalle, disponibilidad y **botón "Agregar al carrito"** (reemplaza el placeholder de Fase 2) + `Header`.
   - `src/App.tsx` — rutas `/`, `/producto/:id`, `/carrito`; `*` → redirect a `/`.
   - `src/index.css` — paleta brand (`--color-navy`, `--color-brand`); sin cambios.
-  - `frontend/.env.development` — `VITE_*` del dev (leídas por Vite en contenedor): `VITE_AUTH_DELEGATED=true`, `VITE_AUTH_URL=http://localhost:5175`, `VITE_API_PROXY=http://tienda-backend:3007`, `VITE_AUTH_SSO_PROXY=http://host.docker.internal:3006`.
-  - `vite.config.ts` — proxy `/api`→backend tienda y `/auth-sso`→backend auth (`http://host.docker.internal:3006`; en contenedor NO usar `127.0.0.1`).
+  - `frontend/.env.development` — `VITE_*` del dev: `VITE_AUTH_DELEGATED=true`, `VITE_AUTH_URL=http://localhost:5175`, `VITE_API_PROXY=http://localhost:3007`, `VITE_AUTH_SSO_PROXY=http://localhost:3006` (**ejecución sin Docker**: los proxies apuntan a `localhost`). En contenedor Docker dev usar `http://tienda-backend:3007` y `http://host.docker.internal:3006` (valores en `.env.dev`).
+  - `vite.config.ts` — proxy `/api`→backend tienda y `/auth-sso`→backend auth (lee `VITE_API_PROXY` / `VITE_AUTH_SSO_PROXY`; en contenedor NO usar `127.0.0.1`).
+  - `backend/.env` — **necesario para correr el backend sin Docker** (`cd backend && npm run dev`): `DB_HOST=localhost`, `DB_PORT=5433`, `DB_USER/PASSWORD/NAME`, `JWT_SECRET`, `PORT=3007`, `CORS_ORIGINS=http://localhost:5178`. Sin este archivo la BD queda desconectada (`/health` → 500) y el catálogo no carga.
 - Schema `tienda` (centralizado): el archivo `db/01_tienda.sql` fue **eliminado** de este repo; ahora vive en el repositorio compartido `../maxan-db/init/09_tienda.sql` (idempotente, `CREATE SCHEMA IF NOT EXISTS` + `CREATE TABLE IF NOT EXISTS`). Define `tienda.productos_venta` (FK `inventario.productos`), `cotizaciones` (estado `pendiente|confirmada|cancelada`) y `cotizaciones_items` (snapshot, sin FK). **Aplicada a `maxan_db_dev`** (14 `productos_venta` de prueba sembrados sobre el inventario existente).
 - `docker-compose.{dev,prod}.yml`, `deploy.sh`, `.env.{example,dev,prod}` — patrón maxan-auth (dev 3007/5178 + `extra_hosts`; prod red `maxan_shared` + `127.0.0.1:8082:80`; `deploy.sh` con grep, backup, pull ff-only, health check).
 
@@ -71,13 +72,13 @@ Actualizar **AGENTS.md** y **README.md** conforme avanza el desarrollo.
 
 ## Variables de entorno
 - **Backend**: `PORT` (3007; host **8082**), `DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME` (dev `host.docker.internal:5433`; prod `maxan_db:5432`), `JWT_SECRET` (**idéntico a maxan-auth/ERP**, obligatorio en prod), `JWT_EXPIRES_IN`, `CORS_ORIGINS`, `PUBLIC_URL`, `N8N_WEBHOOK_URL`. `config/auth.js` lanza error si `NODE_ENV=production` sin `JWT_SECRET`.
-- **Frontend** (dev lo lee Vite de `frontend/.env.development`): `VITE_AUTH_DELEGATED=true` (SSO activo), `VITE_AUTH_URL` (URL pública de auth: dev `http://localhost:5175`, prod `https://auth.maxansistemas.com`), `VITE_API_PROXY` y `VITE_AUTH_SSO_PROXY` (solo usados por el proxy de Vite en dev; en contenedor usar `host.docker.internal`).
+- **Frontend** (dev lo lee Vite de `frontend/.env.development`): `VITE_AUTH_DELEGATED=true` (SSO activo), `VITE_AUTH_URL` (URL pública de auth: dev `http://localhost:5175`, prod `https://auth.maxansistemas.com`), `VITE_API_PROXY` y `VITE_AUTH_SSO_PROXY` (solo usados por el proxy de Vite en dev; **sin Docker** → `http://localhost:3007` / `http://localhost:3006`; en contenedor usar `host.docker.internal`).
 
 ## Modelo de datos
 - Reutiliza schema `usuarios` (identidad vía JWT) e `inventario` (catálogo + **`inventario.imagenes`** para fotos de productos).
 - Nuevo schema `tienda`: `productos_venta`, `cotizaciones`, `cotizaciones_items` (ver `../maxan-db/init/09_tienda.sql`).
 - Referencia ERP: `inventario.productos` (`id, codigo, nombre, categoria, inventariable, unidad_medida`) y stock = `SUM(inventario.entradas.cantidad_disponible)`.
-- **Imágenes**: tabla `inventario.imagenes` (id, producto_id FK→productos ON DELETE CASCADE, url, es_principal, orden, created_at). Imágenes almacenadas en Cloudflare R2 (bucket `maxan-erp`), la BD solo guarda URLs. La tienda hace LEFT JOIN LATERAL para obtener la imagen principal en el listado, y carga todas en el detalle.
+- **Imágenes**: tabla `inventario.imagenes` (id, producto_id FK→productos ON DELETE CASCADE, url, es_principal, orden, created_at). Imágenes almacenadas en Cloudflare R2 (bucket `maxan-erp`, **acceso público habilitado** → URLs `https://pub-<hash>.r2.dev/...`), la BD solo guarda URLs. La tienda hace LEFT JOIN LATERAL para obtener la imagen principal en el listado, y carga todas en el detalle. La imagen del modal del ERP y la tienda se veían rotas porque `R2_PUBLIC_URL` del ERP usaba el endpoint S3 API privado (fix documentado en `maxan-erp/AGENTS.md` #67).
 
 ## Docker
 - Dev: `maxan-tienda-backend-dev` (nodemon, bind mount) + `maxan-tienda-frontend-dev` (Vite HMR 5178, con `extra_hosts: host.docker.internal` para el proxy `/auth-sso`). Comando: `docker compose -f docker-compose.dev.yml --env-file .env.dev up`.
@@ -93,6 +94,7 @@ Actualizar **AGENTS.md** y **README.md** conforme avanza el desarrollo.
 6. **Producción** — Caddyfile, CORS auth, aplicar SQL a prod, deploy.
 
 ## Próximos pasos (retomar sesión)
+- **Dev verificado SIN Docker (2026-09-05)**: `cd backend && npm run dev` (3007) + `cd frontend && npm run dev` (5178) funciona punta a punta tras crear `backend/.env` y apuntar `frontend/.env.development` a `localhost`. Catálogo (productos/categorías) **200**, SSO `/auth-sso` a auth (`localhost:3006`) **200**, imágenes R2 públicas cargando.
 - **Fase 4 (pedidos/cotizaciones) completada y verificada** en Docker dev: crear/listar/detalle/cancelar (401/403/400/409 OK), con validación de items contra el catálogo. Pendientes:
   1. Validar el flujo completo en navegador (agregar al carrito → checkout → confirmación) con un cliente autenticado.
   2. maxan-auth: añadir `https://tienda.maxansistemas.com` a CORS prod (dev `http://localhost:5178` ya añadido).
