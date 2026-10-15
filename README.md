@@ -69,6 +69,7 @@ El ERP referencia: `inventario.productos` (`id, codigo, nombre, categoria, inven
 ## Variables de entorno
 - **Backend**: `PORT` (3007; host **8082** vía compose/Caddy), `DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME` (dev: `host.docker.internal:5433`; prod: `maxan_db:5432`), `JWT_SECRET` (**idéntico al de maxan-auth/ERP**, obligatorio en prod), `JWT_EXPIRES_IN`, `CORS_ORIGINS`, `PUBLIC_URL`, `N8N_WEBHOOK_URL`.
 - **Frontend** (en dev Vite las lee de `frontend/.env.development`): `VITE_AUTH_DELEGATED` (SSO activo), `VITE_AUTH_URL` (URL pública de auth), `VITE_API_PROXY` y `VITE_AUTH_SSO_PROXY` (proxy dev de Vite).
+- **Frontend prod** (`frontend/.env.production`, versionado, sin secretos): `VITE_AUTH_DELEGATED=true` y `VITE_AUTH_URL=https://auth.maxansistemas.com`. Es **obligatorio** para que el build de producción (`npm run build` en el Dockerfile) active el SSO: sin este archivo `VITE_AUTH_DELEGATED` queda `undefined` y no se restaura sesión por cookie ni se redirige al login ante un 401.
 
 ## Infra
 - Compose prod: `tienda-backend` (expose 3007) + `tienda-frontend` (`127.0.0.1:8082:80`, nginx proxy `/api/` y `/health` → `tienda-backend:3007`). Red `maxan_shared` externa.
@@ -84,8 +85,7 @@ El ERP referencia: `inventario.productos` (`id, codigo, nombre, categoria, inven
 6. **Producción** — Caddyfile (`tienda.maxansistemas.com → 8082`), CORS de auth += `https://tienda.maxansistemas.com`, deploy.
 
 ## Pendientes
+- **Fase 6 en preparación**: `frontend/.env.production` ya versionado (SSO activo en build prod). Faltan pasos de servidor: DNS `tienda.maxansistemas.com`, Caddyfile → `127.0.0.1:8082`, `.env.prod` completo, CORS de auth prod += `https://tienda.maxansistemas.com`, aplicar schema `tienda` a `maxan_db` (+ verificar `inventario.imagenes`) y sembrar `productos_venta` reales; luego `bash deploy.sh`.
 - Schema `tienda`: ya aplicado a `maxan_db_dev` (con 14 `productos_venta` de prueba). En producción (`maxan_db`) aplicarlo junto al init de `maxan-db`.
-- maxan-auth: CORS prod += `https://tienda.maxansistemas.com` (dev `http://localhost:5178` ya añadido).
 - Validar en navegador el flujo completo: agregar al carrito → checkout → confirmación (con un cliente autenticado).
 - Fase 5 — webhook a n8n (`N8N_WEBHOOK_URL`) al crear cotización.
-- Caddyfile servidor: añadir `tienda.maxansistemas.com → 127.0.0.1:8082`.
