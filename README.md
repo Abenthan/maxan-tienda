@@ -33,7 +33,7 @@ La BD es la del ERP dev (`maxan_db_dev`, puerto host **5433**). El `JWT_SECRET` 
 - **El ERP es la única fuente de verdad** de productos e inventario. La tienda **solo consume** catálogo y **genera cotizaciones**.
 - **Sin pasarela de pago en el MVP**: el checkout genera una cotización en estado `pendiente`; el asesor confirma la venta desde el ERP (por eso el stock **nunca bloquea**; la disponibilidad es informativa).
 - **Desacoplamiento**: `cotizaciones_items` guarda snapshot (código, nombre, precio) sin FK al ERP.
-- **Precios propios**: el ERP no tiene precio maestro → `tienda.productos_venta` (precio, visibilidad). Administrable desde el ERP (o SQL en MVP).
+- **Precios propios**: el ERP no tiene precio maestro → `tienda.productos_venta` (precio, visibilidad). Administrable desde el ERP en **`/gestionTienda`** (módulo Tienda del ERP: alta desde inventario, precio/activo/destacado, permiso `tienda.gestionar`).
 - **Stock**: `inventable=true` → `SUM(inventario.entradas.cantidad_disponible)`. Los productos con stock 0 o sin precio no se venden.
 - **Webhook a n8n**: al crear una cotización se dispara un POST best-effort a `N8N_WEBHOOK_URL` (`{evento:'cotizacion.creada', cotizacion:{...}}`). Vacío = desactivado. Uso: aviso por Telegram ahora, CRM a futuro.
 - **Sesiones**: identidad vía cookie de sesión de auth + JWT (mismo secreto) para llamadas autenticadas.
@@ -82,10 +82,10 @@ El ERP referencia: `inventario.productos` (`id, codigo, nombre, categoria, inven
 3. **Registro/login SSO** — registro de clientes ("Cliente Tienda" vía auth) + restaurar sesión. *✅ completada*
 4. **Carrito + checkout** — carrito localStorage, POST `/api/pedidos` genera cotización. *✅ completada*
 5. **Webhook n8n** — aviso de cotización (Telegram/CRM).
-6. **Producción** — Caddyfile (`tienda.maxansistemas.com → 8082`), CORS de auth += `https://tienda.maxansistemas.com`, deploy.
+6. **Producción** — Desplegado en `https://tienda.maxansistemas.com`. DNS, Caddy, CORS, BD y deploy completados. *✅ completada*
 
 ## Pendientes
-- **Fase 6 en preparación**: `frontend/.env.production` ya versionado (SSO activo en build prod). Faltan pasos de servidor: DNS `tienda.maxansistemas.com`, Caddyfile → `127.0.0.1:8082`, `.env.prod` completo, CORS de auth prod += `https://tienda.maxansistemas.com`, aplicar schema `tienda` a `maxan_db` (+ verificar `inventario.imagenes`) y sembrar `productos_venta` reales; luego `bash deploy.sh`.
+- **Fase 6 completada**: Desplegado en producción. `https://tienda.maxansistemas.com` activo con Caddy proxy a `127.0.0.1:8082`, `.env.prod` completo, CORS de auth actualizado, migraciones aplicadas a `maxan_db`, `tienda.productos_venta` sembrados y `bash deploy.sh` ejecutado exitosamente.
 - Schema `tienda`: ya aplicado a `maxan_db_dev` (con 14 `productos_venta` de prueba). En producción (`maxan_db`) aplicarlo junto al init de `maxan-db`.
 - Validar en navegador el flujo completo: agregar al carrito → checkout → confirmación (con un cliente autenticado).
 - Fase 5 — webhook a n8n (`N8N_WEBHOOK_URL`) al crear cotización.

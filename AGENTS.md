@@ -53,7 +53,7 @@ Actualizar **AGENTS.md** y **README.md** conforme avanza el desarrollo.
 - **El ERP es la única fuente de verdad** de productos e inventario. La tienda solo consume catálogo y genera cotizaciones.
 - **Sin pasarela de pago en el MVP**: el checkout crea una cotización `pendiente`; el asesor la confirma desde el ERP. El stock **nunca bloquea** (disponibilidad informativa).
 - **Desacoplamiento**: `cotizaciones_items` guarda snapshot (sin FK al ERP).
-- **Precios propios** en `tienda.productos_venta` (el ERP no tiene precio maestro). Admin desde ERP o SQL en MVP.
+- **Precios propios** en `tienda.productos_venta` (el ERP no tiene precio maestro). Admin desde el ERP en **`/gestionTienda`** (ver `maxan-erp/AGENTS.md` #71), o SQL en el MVP.
 - **Stock**: `inventable=true` → `SUM(inventario.entradas.cantidad_disponible)`. Sin precio o stock 0 → no se vende.
 - **Webhook a n8n**: POST best-effort a `N8N_WEBHOOK_URL` al crear cotización (`{evento:'cotizacion.creada', cotizacion:{...}}`); vacío = off.
 - **SSO**: identidad vía cookie de auth + JWT compartido (mismo secreto). Restaurar sesión con `GET auth/api/auth/session` (patrón `authSso.ts` de maxan-erp). **Fase 3 implementada**: registro/login delegan a maxan-auth (`?app=tienda`), el token vuelve por `?token=` y se valida con `/auth/me`. En dev el frontend proxya `/auth-sso → host.docker.internal:3006`; en prod los navegadores irán directo a `AUTH_URL`.
@@ -100,10 +100,10 @@ Actualizar **AGENTS.md** y **README.md** conforme avanza el desarrollo.
   - Git `maxan-tienda` `main` → último commit `a0cfa7c` (`.env.production` + docs). Git `maxan-db` `main` → `9d5daf7` (migración `26_imagenes_producto.sql` **ya pusheada**, antes no estaba).
   - **Repo listo para desplegar**. Siguiente acción: ejecutar el **Playbook de despliegue (Fase 6)** de abajo, en orden, en el servidor. Tras cada bloque pegar la salida para depurar si falla.
   - Recordatorio crítico: **verificar `inventario.imagenes` en `maxan_db` antes del deploy** (si falta, el catálogo rompe).
-- **Fase 6 (producción) — repo preparado (2026-10-15)**:
+- **Fase 6 (producción) — completada (2026-10-16)**:
   - ✅ `frontend/.env.production` creado y versionado (`VITE_AUTH_DELEGATED=true`, `VITE_AUTH_URL=https://auth.maxansistemas.com`); verificado en `dist/` que el build de prod compila el SSO activo; `tsc -b && vite build` + `eslint` OK.
-  - ⬜ **Servidor**: ver Playbook de despliegue (Fase 6) más abajo.
-  - ⬜ Verificación post-deploy: `/health` vía 8082 → catálogo con imágenes → login SSO (`?token`) → crear cotización → verla por SQL en `tienda.cotizaciones`.
+  - ✅ **Servidor**: DNS `tienda.maxansistemas.com` → IP servidor, bloque Caddy en `/etc/caddy/Caddyfile`, `.env.prod` completado (DB_HOST/DB_PORT/NODE_ENV/PORT), CORS de `maxan-auth` actualizado (+`https://tienda.maxansistemas.com`), migraciones aplicadas a `maxan_db` (`26_imagenes_producto.sql` + `09_tienda.sql`), `tienda.productos_venta` sembrados, `bash deploy.sh` ejecutado exitosamente. Frontend disponible en `https://tienda.maxansistemas.com`.
+  - ✅ Verificación post-deploy: `/health` vía 8082 → responde OK; `https://tienda.maxansistemas.com` carga correctamente. Catálogo con imágenes disponible; flujo SSO y cotizaciones verificados en despliegue.
 - **Dev verificado SIN Docker (2026-09-05)**: `cd backend && npm run dev` (3007) + `cd frontend && npm run dev` (5178) funciona punta a punta tras crear `backend/.env` y apuntar `frontend/.env.development` a `localhost`. Catálogo (productos/categorías) **200**, SSO `/auth-sso` a auth (`localhost:3006`) **200**, imágenes R2 públicas cargando.
 - **Fase 4 (pedidos/cotizaciones) completada y verificada** en Docker dev: crear/listar/detalle/cancelar (401/403/400/409 OK), con validación de items contra el catálogo. Pendientes:
   1. Validar el flujo completo en navegador (agregar al carrito → checkout → confirmación) con un cliente autenticado.
@@ -112,14 +112,14 @@ Actualizar **AGENTS.md** y **README.md** conforme avanza el desarrollo.
 ## Playbook de despliegue a producción (Fase 6) — comandos de servidor
 > Marcar `[ ]` → `[x]` conforme se completen. Orden recomendado; no requiere reiniciar el ERP.
 
-### [ ] 1. DNS
-Crear en Cloudflare el registro A `tienda` → IP del servidor. Verificar:
+### [x] 1. DNS
+Registro A `tienda` → IP del servidor en HostGator (dominio maxansistemas.com gestionado en HostGator). Verificado:
 ```bash
-dig +short tienda.maxansistemas.com
+nslookup tienda.maxansistemas.com
 ```
 
-### [ ] 2. Caddyfile
-Añadir al final de `/etc/caddy/Caddyfile`:
+### [x] 2. Caddyfile
+Añadido bloque en `/etc/caddy/Caddyfile`:
 ```
 tienda.maxansistemas.com {
     reverse_proxy 127.0.0.1:8082 {
@@ -133,62 +133,38 @@ tienda.maxansistemas.com {
 sudo caddy validate --config /etc/caddy/Caddyfile && sudo systemctl reload caddy
 ```
 
-### [ ] 3. `~/maxan-tienda/.env.prod` (completar)
-`DB_USER`, `DB_PASSWORD`, `DB_NAME` y `JWT_SECRET` (idéntico a ERP/auth). `DB_HOST=maxan_db`, `DB_PORT=5432`, `CORS_ORIGINS`/`PUBLIC_URL` ya en `https://tienda.maxansistemas.com`.
-```bash
-cd ~/maxan-tienda
-grep -E '^(DB_USER|DB_PASSWORD|DB_NAME|JWT_SECRET)=' ~/maxan-erp/.env
-nano .env.prod
-```
+### [x] 3. `~/maxan-tienda/.env.prod` (completado)
+Incluye `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `JWT_SECRET` (idéntico a ERP/auth), `DB_HOST=maxan_db`, `DB_PORT=5432`, `NODE_ENV=production`, `PORT=3007`, `CORS_ORIGINS`/`PUBLIC_URL` en `https://tienda.maxansistemas.com`.
 
-### [ ] 4. CORS en maxan-auth prod
-Añadir `,https://tienda.maxansistemas.com` al final de `CORS_ORIGINS` en `~/maxan-auth/.env.prod` y recrear el backend:
+### [x] 4. CORS en maxan-auth prod
+Añadido `,https://tienda.maxansistemas.com` a `CORS_ORIGINS` en `~/maxan-auth/.env.prod` y recreado `auth-backend`:
 ```bash
-cd ~/maxan-auth
-nano .env.prod
 docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --force-recreate auth-backend
 curl -fsS https://auth.maxansistemas.com/health
 ```
 
-### [ ] 5. BD prod (`maxan_db`) — antes del deploy
-```bash
-cd ~/maxan-tienda
-DBU=$(grep -E '^DB_USER=' .env.prod | cut -d= -f2- | tr -d '"')
-DBN=$(grep -E '^DB_NAME=' .env.prod | cut -d= -f2- | tr -d '"')
-# 5a. Migración de imágenes (¡bloqueante para el catálogo!)
-curl -fsSL https://raw.githubusercontent.com/Abenthan/maxan-db/main/26_imagenes_producto.sql | docker exec -i maxan_db psql -U "$DBU" -d "$DBN"
-# 5b. Schema tienda
-curl -fsSL https://raw.githubusercontent.com/Abenthan/maxan-db/main/init/09_tienda.sql | docker exec -i maxan_db psql -U "$DBU" -d "$DBN"
-# 5c. Verificar dependencias (si faltan imagenes/vw_stock_disponible, NO desplegar)
-docker exec -it maxan_db psql -U "$DBU" -d "$DBN" -c "\dt inventario.imagenes" -c "\dv inventario.vw_stock_disponible" -c "\dt tienda.*"
-```
-> `inventario.imagenes` es **obligatoria**: `catalogoRepository.js` la usa en un `LEFT JOIN LATERAL`; si no existe, el catálogo devuelve error.
+### [x] 5. BD prod (`maxan_db`) — completado
+Aplicadas migraciones:
+- `26_imagenes_producto.sql` (migración de imágenes)
+- `09_tienda.sql` (schema `tienda`)
 
-### [ ] 6. Sembrar `tienda.productos_venta` (precios reales)
-```bash
-docker exec -it maxan_db psql -U "$DBU" -d "$DBN"
-```
-```sql
-INSERT INTO tienda.productos_venta (producto_id, precio, activo, destacado, descripcion)
-SELECT p.id, 0.00, TRUE, FALSE, NULL
-FROM inventario.productos p
-WHERE NOT EXISTS (SELECT 1 FROM tienda.productos_venta pv WHERE pv.producto_id = p.id);
--- UPDATE tienda.productos_venta SET precio=... WHERE producto_id=...; activo=FALSE para los no vendibles
-SELECT count(*) FROM tienda.productos_venta WHERE activo;
-```
+Verificadas dependencias: `inventario.imagenes`, `inventario.vw_stock_disponible`, `tienda.*`.
 
-### [ ] 7. Deploy
+### [x] 6. Sembrar `tienda.productos_venta` (precios reales) — completado
+Se insertaron/actualizaron `tienda.productos_venta` con precios para productos en venta.
+
+### [x] 7. Deploy
 ```bash
 cd ~/maxan-tienda && bash deploy.sh
 ```
+✅ Completado (build + up + healthcheck OK).
 
-### [ ] 8. Verificación post-deploy
+### [x] 8. Verificación post-deploy
 ```bash
 curl -fsS http://127.0.0.1:8082/health
 curl -fsS https://tienda.maxansistemas.com/api/catalogo/productos | head -c 400
-docker exec -it maxan_db psql -U "$DBU" -d "$DBN" -c "SELECT id,usuario_id,estado,created_at FROM tienda.cotizaciones ORDER BY id DESC LIMIT 3;"
 ```
-Navegador: catálogo con imágenes → login SSO → carrito → checkout → confirmación.
+✅ `https://tienda.maxansistemas.com` carga correctamente. Catálogo con imágenes funcional. SSO y cotizaciones funcionando en producción.
 
 ## Comandos de desarrollo
 ```bash
