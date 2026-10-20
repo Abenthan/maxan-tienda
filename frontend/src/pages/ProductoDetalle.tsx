@@ -55,7 +55,7 @@ export default function ProductoDetalle() {
                   <img
                     src={imgActual}
                     alt={producto.nombre}
-                    className="w-full h-80 lg:h-96 object-cover rounded-lg"
+                    className="w-full h-80 lg:h-96 object-contain bg-gray-50 rounded-lg"
                   />
                 ) : (
                   <div className="w-full h-80 lg:h-96 bg-gray-100 rounded-lg flex items-center justify-center">
@@ -72,7 +72,7 @@ export default function ProductoDetalle() {
                           idx === imgSeleccionada ? 'border-brand' : 'border-gray-200 hover:border-gray-300'
                         }`}
                       >
-                        <img src={img.url} alt="" className="w-full h-full object-cover" />
+                        <img src={img.url} alt="" className="w-full h-full object-contain bg-gray-50" />
                       </button>
                     ))}
                   </div>

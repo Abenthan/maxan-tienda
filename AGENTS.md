@@ -96,6 +96,36 @@ Actualizar **AGENTS.md** y **README.md** conforme avanza el desarrollo.
 6. **Producción** — Caddyfile, CORS auth, aplicar SQL a prod, deploy. *🔄 en curso — repo preparado (`.env.production`); faltan pasos de servidor.*
 
 ## Próximos pasos (retomar sesión)
+- **⚠️ INCIDENTE PRODUCCIÓN (2026-10-19) — catálogo no carga (PENDIENTE, ejecutar en servidor)**:
+  - **Síntoma**: `https://tienda.maxansistemas.com` muestra *"No se pudo cargar el catálogo. Inténtalo de nuevo."* (`frontend/src/pages/Catalogo.tsx:24`, catch de `fetchProductos`/`fetchCategorias`).
+  - **Diagnóstico remoto (2026-10-19, hecho desde la máquina local)**:
+    - `GET /` y `/assets/*` → **200** (nginx del frontend OK).
+    - `GET /health` y `/api/catalogo/productos|categorias` → **502** (nginx no alcanza `tienda-backend:3007`).
+    - `https://auth.maxansistemas.com/` y `/health` → **502** (Caddy no alcanza el puerto 8081 → **stack auth también caído**; rompe login SSO de la tienda).
+    - `erp`, `maxansistemas.com`, `n8n`, `soporte`, `evolution` → 200; `erp/health` → `db: connected` (**`maxan_db` arriba**).
+    - **Conclusión**: no es código (último commit `2c8e414` solo toca docs) ni BD. Backend de tienda **no escucha en 3007** y el stack auth **no escucha en 8081**: contenedores exited/sin red `maxan_shared`, o falla del último `up`.
+  - **Plan de remediación en el servidor (SSH `ubuntu@149.130.171.164`; pegar salidas para depurar)**:
+    1. Estado de contenedores:
+       ```bash
+       docker ps -a --filter "name=maxan-tienda" --filter "name=maxan-auth"
+       docker inspect -f '{{.State.Status}} exit={{.State.ExitCode}} err={{.State.Error}}' maxan-tienda-backend
+       ```
+    2. Logs de la causa raíz:
+       ```bash
+       docker logs --tail=80 maxan-tienda-backend
+       docker logs --tail=40 maxan-auth-backend maxan-auth-frontend
+       ```
+    3. Red compartida:
+       ```bash
+       docker network inspect maxan_shared | grep -A3 -E 'maxan-tienda|ContainerName'
+       ```
+    4. Remediación según logs: `cd ~/maxan-tienda && bash deploy.sh` (health check real vía `/health`) e `idem ~/maxan-auth`; si la red está rota → `docker network connect maxan_shared <container>` o `up -d --force-recreate`.
+    5. Verificación:
+       ```bash
+       curl -fsS https://tienda.maxansistemas.com/api/catalogo/productos | head -c 400   # 200
+       curl -fsS https://auth.maxansistemas.com/health                                   # 200 {"status":"ok"}
+       ```
+       + probar en navegador el catálogo y el login SSO.
 - **HANDOFF (cierre de sesión 2026-10-15)**:
   - Git `maxan-tienda` `main` → último commit `a0cfa7c` (`.env.production` + docs). Git `maxan-db` `main` → `9d5daf7` (migración `26_imagenes_producto.sql` **ya pusheada**, antes no estaba).
   - **Repo listo para desplegar**. Siguiente acción: ejecutar el **Playbook de despliegue (Fase 6)** de abajo, en orden, en el servidor. Tras cada bloque pegar la salida para depurar si falla.

@@ -140,7 +140,7 @@ function ProductCard({ producto, agotado = false }: { producto: Producto; agotad
           src={producto.imagenPrincipal}
           alt={producto.nombre}
           loading="lazy"
-          className="w-full h-48 object-cover"
+          className="w-full h-48 object-contain bg-gray-50 p-2"
         />
       ) : (
         <div className="w-full h-48 bg-gray-100 flex items-center justify-center">
