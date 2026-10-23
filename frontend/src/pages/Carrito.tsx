@@ -1,20 +1,27 @@
 import { useState } from 'react'
 import axios from 'axios'
-import { Link, useNavigate } from 'react-router-dom'
-import Header from '../components/Header'
+import { Link } from 'react-router-dom'
 import { useCart } from '../context/CartContext'
 import { useAuth } from '../context/AuthContext'
 import { crearPedido, type Pedido } from '../lib/api'
 import { redirectToAuthLogin } from '../lib/authSso'
+import { formatCOP } from '../lib/format'
+import { useSeo } from '../lib/seo'
 
 export default function Carrito() {
   const { items, setCantidad, remove, clear, total, count } = useCart()
   const { user, loading: authLoading } = useAuth()
-  const navigate = useNavigate()
   const [observaciones, setObservaciones] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pedido, setPedido] = useState<Pedido | null>(null)
+
+  useSeo({
+    title: 'Carrito y cotización | Tienda Maxan',
+    description: 'Revisa los productos de tu carrito y genera tu cotización de Maxan Sistemas.',
+    path: '/carrito',
+    noindex: true,
+  })
 
   function currentUrl() {
     return window.location.origin + window.location.pathname + window.location.search
@@ -42,138 +49,211 @@ export default function Carrito() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <Header />
+    <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:py-10">
+      <nav aria-label="Migas de pan" className="text-sm text-maxan-text-secondary">
+        <ol className="flex items-center gap-2">
+          <li>
+            <Link to="/" className="underline-offset-4 hover:text-maxan-navy hover:underline">
+              Catálogo
+            </Link>
+          </li>
+          <li aria-hidden="true">/</li>
+          <li className="font-medium text-maxan-navy" aria-current="page">
+            Carrito
+          </li>
+        </ol>
+      </nav>
 
-      <main className="max-w-5xl mx-auto px-4 py-10 flex-1 w-full">
-        <Link to="/" className="text-sm text-brand hover:underline">
-          ← Volver al catálogo
-        </Link>
-        <h1 className="mt-4 text-3xl font-bold text-navy">Carrito y cotización</h1>
+      <h1 className="mt-4 text-3xl font-bold tracking-tight text-maxan-navy">Carrito y cotización</h1>
 
-        {pedido ? (
-          <div className="mt-8 bg-white rounded-xl border border-green-200 p-8 text-center">
-            <div className="mx-auto w-14 h-14 flex items-center justify-center rounded-full bg-green-50 text-green-600 text-3xl">
-              ✓
-            </div>
-            <h2 className="mt-4 text-2xl font-bold text-navy">Cotización {pedido.id} creada</h2>
-            <p className="mt-2 text-gray-600">
-              Quedó en estado <span className="font-medium">pendiente</span>. Un asesor de Maxan la
-              revisará y confirmará la venta. Puedes seguir este estado desde la consulta de pedidos.
-            </p>
-            <div className="mt-6 flex justify-center gap-3">
-              <button onClick={() => navigate('/carrito')} className="bg-brand text-white px-6 py-3 rounded-lg font-semibold hover:opacity-90">
-                Nueva cotización
-              </button>
-              <Link to="/" className="px-6 py-3 rounded-lg font-semibold text-brand hover:underline">
-                Seguir comprando
-              </Link>
-            </div>
+      {pedido ? (
+        <section
+          role="status"
+          aria-labelledby="titulo-confirmacion"
+          className="card mt-8 px-6 py-10 text-center"
+        >
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-maxan-success-soft">
+            <svg
+              width="28"
+              height="28"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="text-maxan-success"
+              aria-hidden="true"
+            >
+              <path d="M20 6 9 17l-5-5"></path>
+            </svg>
           </div>
-        ) : items.length === 0 ? (
-          <div className="mt-8 bg-white rounded-xl border border-gray-200 p-12 text-center">
-            <p className="text-gray-500">Tu carrito está vacío.</p>
-            <Link to="/" className="mt-4 inline-block bg-brand text-white px-6 py-3 rounded-lg font-semibold hover:opacity-90">
-              Explorar el catálogo
+          <h2 id="titulo-confirmacion" className="mt-4 text-2xl font-bold text-maxan-navy">
+            Cotización {pedido.id} creada
+          </h2>
+          <p className="mx-auto mt-2 max-w-xl text-maxan-text-secondary">
+            Quedó en estado <span className="font-semibold">pendiente</span>. Un asesor de Maxan
+            revisa la disponibilidad y el precio final, y te confirma la venta. Puedes seguir el
+            estado desde mis cotizaciones.
+          </p>
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
+            <Link to="/cotizaciones" className="btn btn-primary px-5">
+              Ver mis cotizaciones
+            </Link>
+            <Link to="/" className="btn btn-secondary px-5">
+              Seguir comprando
             </Link>
           </div>
-        ) : (
-          <div className="mt-8 grid lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-4">
-              {items.map((it) => (
-                <div key={it.productoId} className="bg-white rounded-xl border border-gray-200 p-5 flex items-center gap-4">
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-navy">{it.nombre}</h3>
-                    <p className="text-sm text-gray-400">{it.codigo}</p>
-                    <p className="mt-1 text-sm text-gray-500">{formatCOP(it.precio)} × {it.cantidad}</p>
+        </section>
+      ) : items.length === 0 ? (
+        <div className="card mt-8 px-6 py-14 text-center">
+          <p className="text-lg text-maxan-text-secondary">Tu carrito está vacío.</p>
+          <Link to="/" className="btn btn-primary mt-6 px-6">
+            Explorar el catálogo
+          </Link>
+        </div>
+      ) : (
+        <div className="mt-8 grid gap-6 lg:grid-cols-3">
+          <section aria-label="Productos del carrito" className="space-y-4 lg:col-span-2">
+            {items.map((it) => (
+              <article key={it.productoId} className="card p-5">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <h2 className="font-semibold text-maxan-navy">{it.nombre}</h2>
+                    <p className="mt-1 text-sm text-maxan-text-muted">
+                      {it.codigo}
+                      {it.unidadMedida ? ` · ${it.unidadMedida}` : ''}
+                    </p>
+                    <p className="mt-1 text-sm text-maxan-text-secondary">
+                      {formatCOP(it.precio)} por unidad
+                    </p>
                   </div>
-                  <div className="flex items-center gap-2">
+
+                  <div className="flex items-center gap-3">
+                    <div>
+                      <label
+                        htmlFor={`cantidad-${it.productoId}`}
+                        className="field-label text-xs"
+                      >
+                        Cantidad
+                      </label>
+                      <input
+                        id={`cantidad-${it.productoId}`}
+                        type="number"
+                        inputMode="numeric"
+                        min={1}
+                        step={1}
+                        value={it.cantidad}
+                        onChange={(e) =>
+                          setCantidad(it.productoId, Math.max(1, Number(e.target.value) || 1))
+                        }
+                        className="field-input w-24"
+                      />
+                    </div>
+                    <p className="w-32 text-right text-lg font-bold text-maxan-navy">
+                      {formatCOP(it.precio * it.cantidad)}
+                    </p>
                     <button
-                      onClick={() => setCantidad(it.productoId, it.cantidad - 1)}
-                      className="w-8 h-8 rounded border border-gray-200 text-navy hover:bg-gray-100"
-                      aria-label="Restar"
+                      type="button"
+                      onClick={() => remove(it.productoId)}
+                      aria-label={`Quitar ${it.nombre} del carrito`}
+                      className="btn btn-secondary px-3 text-maxan-danger"
                     >
-                      −
-                    </button>
-                    <span className="w-8 text-center font-medium">{it.cantidad}</span>
-                    <button
-                      onClick={() => setCantidad(it.productoId, it.cantidad + 1)}
-                      className="w-8 h-8 rounded border border-gray-200 text-navy hover:bg-gray-100"
-                      aria-label="Sumar"
-                    >
-                      +
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M18 6 6 18M6 6l12 12"></path>
+                      </svg>
                     </button>
                   </div>
-                  <div className="w-24 text-right font-semibold text-navy">{formatCOP(it.precio * it.cantidad)}</div>
-                  <button
-                    onClick={() => remove(it.productoId)}
-                    className="text-gray-400 hover:text-red-500 px-2"
-                    aria-label="Quitar"
-                  >
-                    ✕
-                  </button>
                 </div>
-              ))}
+              </article>
+            ))}
+          </section>
+
+          <aside
+            aria-labelledby="titulo-resumen"
+            className="card h-fit px-6 py-6 lg:sticky lg:top-28"
+          >
+            <h2 id="titulo-resumen" className="text-lg font-bold text-maxan-navy">
+              Resumen
+            </h2>
+
+            <dl className="mt-4 space-y-2 text-sm text-maxan-text-secondary">
+              <div className="flex items-center justify-between">
+                <dt>Artículos</dt>
+                <dd className="font-medium text-maxan-navy">{count}</dd>
+              </div>
+              <div className="flex items-center justify-between border-t border-maxan-border pt-2 text-lg font-bold text-maxan-navy">
+                <dt>Total estimado</dt>
+                <dd>{formatCOP(total)}</dd>
+              </div>
+            </dl>
+
+            <div className="mt-6">
+              <label htmlFor="observaciones" className="field-label">
+                Observaciones (opcional)
+              </label>
+              <textarea
+                id="observaciones"
+                value={observaciones}
+                onChange={(e) => setObservaciones(e.target.value)}
+                rows={3}
+                maxLength={500}
+                placeholder="Necesito entrega en Bogotá, fecha sugerida, etc."
+                className="field-input"
+              />
+              <p className="field-hint">El asesor usa estas notas para preparar la cotización.</p>
             </div>
 
-            <aside className="bg-white rounded-xl border border-gray-200 p-6 h-fit">
-              <h2 className="font-semibold text-navy">Resumen</h2>
-              <div className="mt-4 flex items-center justify-between text-sm text-gray-500">
-                <span>Artículos</span>
-                <span>{count}</span>
-              </div>
-              <div className="mt-2 flex items-center justify-between text-lg font-bold text-navy">
-                <span>Total</span>
-                <span>{formatCOP(total)}</span>
-              </div>
+            {!authLoading && !user && (
+              <p className="mt-4 text-sm font-medium text-maxan-text-secondary">
+                Inicia sesión para generar la cotización y seguir su estado.
+              </p>
+            )}
 
-              <label className="mt-6 block text-sm text-gray-500">
-                Observaciones (opcional)
-                <textarea
-                  value={observaciones}
-                  onChange={(e) => setObservaciones(e.target.value)}
-                  rows={3}
-                  className="mt-1 w-full rounded-lg border border-gray-200 p-3 text-sm text-navy focus:border-brand focus:outline-none"
-                />
-              </label>
+            {error && (
+              <p
+                role="alert"
+                className="mt-4 rounded-lg border border-maxan-danger bg-maxan-danger-soft px-4 py-3 text-sm font-medium text-maxan-danger"
+              >
+                {error}
+              </p>
+            )}
 
-              {!authLoading && !user && (
-                <p className="mt-4 text-sm text-red-600">
-                  Necesitas iniciar sesión para generar la cotización.
-                </p>
-              )}
-              {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+            {user ? (
+              <button
+                type="button"
+                onClick={handleCheckout}
+                disabled={submitting}
+                className="btn btn-primary mt-6 w-full px-5"
+              >
+                {submitting ? 'Generando cotización…' : 'Generar cotización'}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => redirectToAuthLogin(currentUrl())}
+                className="btn btn-primary mt-6 w-full px-5"
+              >
+                Iniciar sesión para cotizar
+              </button>
+            )}
 
-              {user ? (
-                <button
-                  onClick={handleCheckout}
-                  disabled={submitting}
-                  className="mt-6 w-full bg-brand text-white py-3 rounded-lg font-semibold hover:opacity-90 disabled:opacity-50"
-                >
-                  {submitting ? 'Generando cotización…' : 'Generar cotización'}
-                </button>
-              ) : (
-                <button
-                  onClick={() => redirectToAuthLogin(currentUrl())}
-                  className="mt-6 w-full bg-navy text-white py-3 rounded-lg font-semibold hover:opacity-90"
-                >
-                  Iniciar sesión para cotizar
-                </button>
-              )}
-            </aside>
-          </div>
-        )}
-      </main>
-
-      <footer className="bg-white border-t border-gray-200">
-        <div className="max-w-6xl mx-auto px-4 py-6 text-sm text-gray-400 text-center">
-          © {new Date().getFullYear()} Maxan Sistemas
+            <p className="field-hint mt-3">
+              Generar la cotización no realiza ningún pago. Un asesor confirma el valor final.
+            </p>
+          </aside>
         </div>
-      </footer>
+      )}
     </div>
   )
-}
-
-function formatCOP(valor: number) {
-  return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(valor)
 }

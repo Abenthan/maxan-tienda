@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+
+# API y páginas de sesión: no tienen contenido indexable
+Disallow: /api/
+Disallow: /health
+Disallow: /carrito
+Disallow: /cotizaciones
+
+Sitemap: https://tienda.maxansistemas.com/sitemap.xml

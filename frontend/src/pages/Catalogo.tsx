@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import Header from '../components/Header'
-import { useCart } from '../context/CartContext'
+import { useEffect, useMemo, useState } from 'react'
+import ProductCard from '../components/ProductCard'
 import { fetchProductos, fetchCategorias, type Producto, type Categoria } from '../lib/api'
+import { itemListJsonLd, useSeo } from '../lib/seo'
 
 export default function Catalogo() {
   const [productos, setProductos] = useState<Producto[]>([])
@@ -16,10 +15,9 @@ export default function Catalogo() {
     async function load() {
       try {
         const [p, c] = await Promise.all([fetchProductos(), fetchCategorias()])
-        if (active) {
-          setProductos(p)
-          setCategorias(c)
-        }
+        if (!active) return
+        setProductos(p)
+        setCategorias(c)
       } catch {
         if (active) setError('No se pudo cargar el catálogo. Inténtalo de nuevo.')
       } finally {
@@ -32,151 +30,102 @@ export default function Catalogo() {
     }
   }, [])
 
-  const visibles = categoria === 'todas' ? productos : productos.filter((p) => p.categoria === categoria)
-  const disponibles = visibles.filter((p) => p.disponible)
-  const sinStock = visibles.filter((p) => !p.disponible)
+  const visibles = useMemo(
+    () => (categoria === 'todas' ? productos : productos.filter((p) => p.categoria === categoria)),
+    [productos, categoria],
+  )
+
+  const jsonLd = useMemo(
+    () => itemListJsonLd(visibles.map((p) => ({ id: p.id, nombre: p.nombre }))),
+    [visibles],
+  )
+
+  useSeo({
+    title: 'Catálogo de equipos, licencias y servicios | Tienda Maxan',
+    description:
+      'Explora el catálogo de Maxan Sistemas: equipos, licencias y servicios de tecnología para empresas en Colombia. Genera tu cotización en línea.',
+    path: '/',
+    jsonLd: [jsonLd],
+  })
+
+  const filtros: { value: Categoria | 'todas'; label: string }[] = [
+    { value: 'todas', label: 'Todas' },
+    ...categorias.map((c) => ({ value: c, label: c })),
+  ]
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <Header />
+    <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:py-10">
+      <section className="rounded-xl bg-maxan-navy px-6 py-10 text-white sm:px-10 sm:py-12">
+        <p className="eyebrow text-maxan-primary-ink">Tienda Maxan</p>
+        <h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
+          Equipos, licencias y servicios para tu empresa
+        </h1>
+        <p className="mt-4 max-w-2xl text-base leading-relaxed text-white/80">
+          Agrega al carrito y genera tu cotización en línea. Un asesor de Maxan confirma
+          disponibilidad, precio final y condiciones de venta.
+        </p>
+      </section>
 
-      <main className="max-w-6xl mx-auto px-4 py-10 flex-1 w-full">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-navy">Catálogo</h1>
-          <p className="mt-2 text-gray-500">
-            Equipos, licencias y servicios de Maxan Sistemas. Cotiza lo que necesites.
-          </p>
-        </div>
+      <section aria-labelledby="titulo-catalogo" className="mt-10">
+        <h2 id="titulo-catalogo" className="section-title">
+          Catálogo
+        </h2>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
+          <div
+            role="alert"
+            className="mt-6 rounded-lg border border-maxan-danger bg-maxan-danger-soft px-4 py-3 text-sm font-medium text-maxan-danger"
+          >
             {error}
           </div>
         )}
 
+        <div
+          role="group"
+          aria-label="Filtrar por categoría"
+          className="mt-6 flex flex-wrap gap-2"
+        >
+          {filtros.map((f) => (
+            <button
+              key={f.value}
+              type="button"
+              aria-pressed={categoria === f.value}
+              onClick={() => setCategoria(f.value)}
+              className={categoria === f.value ? 'btn btn-primary px-4' : 'btn btn-secondary px-4'}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+
+        <p role="status" className="mt-4 text-sm text-maxan-text-secondary">
+          {loading
+            ? 'Cargando catálogo…'
+            : `${visibles.length} ${visibles.length === 1 ? 'producto' : 'productos'}${
+                categoria === 'todas' ? '' : ` en ${categoria}`
+              }`}
+        </p>
+
         {loading ? (
-          <div className="text-gray-500">Cargando catálogo…</div>
+          <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="card h-96 animate-pulse bg-maxan-surface-secondary" />
+            ))}
+          </div>
+        ) : visibles.length === 0 ? (
+          <div className="card mt-6 px-6 py-12 text-center">
+            <p className="text-maxan-text-secondary">
+              No hay productos en esta categoría. Prueba con otra o escríbenos para cotizarlo.
+            </p>
+          </div>
         ) : (
-          <>
-            <div className="flex gap-2 mb-6 flex-wrap">
-              <button
-                onClick={() => setCategoria('todas')}
-                className={`px-4 py-2 rounded-full text-sm font-medium ${
-                  categoria === 'todas'
-                    ? 'bg-navy text-white'
-                    : 'bg-white text-gray-600 border border-gray-200 hover:border-navy/30'
-                }`}
-              >
-                Todas
-              </button>
-              {categorias.map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setCategoria(cat)}
-                  className={`px-4 py-2 rounded-full text-sm font-medium ${
-                    categoria === cat
-                      ? 'bg-navy text-white'
-                      : 'bg-white text-gray-600 border border-gray-200 hover:border-navy/30'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
-
-            {disponibles.length === 0 && sinStock.length === 0 ? (
-              <div className="text-gray-500">No hay productos en esta categoría.</div>
-            ) : (
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {disponibles.map((p) => (
-                  <ProductCard key={p.id} producto={p} />
-                ))}
-                {sinStock.map((p) => (
-                  <ProductCard key={p.id} producto={p} agotado />
-                ))}
-              </div>
-            )}
-          </>
+          <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {visibles.map((p) => (
+              <ProductCard key={p.id} producto={p} />
+            ))}
+          </div>
         )}
-      </main>
-
-      <footer className="bg-white border-t border-gray-200">
-        <div className="max-w-6xl mx-auto px-4 py-6 text-sm text-gray-400 text-center">
-          © {new Date().getFullYear()} Maxan Sistemas
-        </div>
-      </footer>
+      </section>
     </div>
-  )
-}
-
-function formatCOP(valor: number) {
-  return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(valor)
-}
-
-function ProductCard({ producto, agotado = false }: { producto: Producto; agotado?: boolean }) {
-  const { add } = useCart()
-
-  function handleAdd(e: React.MouseEvent) {
-    e.preventDefault()
-    e.stopPropagation()
-    if (producto.disponible) {
-      add({
-        productoId: producto.id,
-        nombre: producto.nombre,
-        codigo: producto.codigo,
-        precio: producto.precio,
-        unidadMedida: producto.unidadMedida,
-      })
-    }
-  }
-
-  return (
-    <Link
-      to={`/producto/${producto.id}`}
-      className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg hover:border-navy/30 transition-shadow"
-    >
-      {producto.imagenPrincipal ? (
-        <img
-          src={producto.imagenPrincipal}
-          alt={producto.nombre}
-          loading="lazy"
-          className="w-full h-48 object-contain bg-gray-50 p-2"
-        />
-      ) : (
-        <div className="w-full h-48 bg-gray-100 flex items-center justify-center">
-          <span className="text-4xl text-gray-300">📦</span>
-        </div>
-      )}
-      <div className="p-6">
-        <div className="flex items-start justify-between gap-2">
-          <span className="inline-block bg-gray-100 text-gray-500 text-xs font-medium px-2 py-1 rounded">
-            {producto.categoria || 'Sin categoría'}
-          </span>
-          {producto.destacado && (
-            <span className="inline-block bg-brand/10 text-brand text-xs font-semibold px-2 py-1 rounded">
-              Destacado
-            </span>
-          )}
-        </div>
-        <h2 className="mt-4 font-semibold text-navy">{producto.nombre}</h2>
-        {producto.descripcion && <p className="mt-2 text-sm text-gray-500 line-clamp-2">{producto.descripcion}</p>}
-        <div className="mt-4 flex items-end justify-between">
-          <span className="text-lg font-bold text-navy">{formatCOP(producto.precio)}</span>
-          {agotado ? (
-            <span className="text-xs text-red-500 font-medium">Agotado</span>
-          ) : (
-            <span className="text-xs text-gray-400">{producto.inventariable ? `${producto.stock} en stock` : 'Disponible'}</span>
-          )}
-        </div>
-        {producto.disponible && (
-          <button
-            onClick={handleAdd}
-            className="mt-4 w-full bg-brand text-white py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"
-          >
-            Agregar
-          </button>
-        )}
-      </div>
-    </Link>
   )
 }

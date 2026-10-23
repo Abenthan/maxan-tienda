@@ -1,169 +1,284 @@
-import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
-import Header from '../components/Header'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useParams } from 'react-router-dom'
 import { useCart } from '../context/CartContext'
 import { fetchProducto, type Producto } from '../lib/api'
+import { formatCOP } from '../lib/format'
+import { breadcrumbJsonLd, productJsonLd, useSeo } from '../lib/seo'
 
 export default function ProductoDetalle() {
   const { id } = useParams<{ id: string }>()
-  const navigate = useNavigate()
   const { add } = useCart()
-  const [producto, setProducto] = useState<Producto | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [added, setAdded] = useState(false)
+  const [resultado, setResultado] = useState<{ producto: Producto | null; error: string | null } | null>(
+    null,
+  )
+  const [agregado, setAgregado] = useState(false)
+  const [cantidad, setCantidad] = useState(1)
   const [imgSeleccionada, setImgSeleccionada] = useState(0)
 
   useEffect(() => {
     let active = true
     fetchProducto(id!)
       .then((p) => {
-        if (active) setProducto(p)
+        if (active) setResultado({ producto: p, error: null })
       })
       .catch(() => {
-        if (active) setError('No se pudo cargar el producto.')
-      })
-      .finally(() => {
-        if (active) setLoading(false)
+        if (active) setResultado({ producto: null, error: 'No se pudo cargar el producto.' })
       })
     return () => {
       active = false
     }
   }, [id])
 
-  const imagenes = producto?.imagenes || []
-  const imgActual = imagenes.length > 0 ? imagenes[imgSeleccionada]?.url : producto?.imagenPrincipal
+  const producto = resultado?.producto ?? null
+  const error = resultado?.error ?? null
+  const loading = resultado === null
+
+  const imagenes = producto?.imagenes ?? []
+  const imgActual = imagenes[imgSeleccionada]?.url ?? producto?.imagenPrincipal ?? null
+
+  const jsonLd = useMemo(() => {
+    if (!producto) return []
+    return [
+      productJsonLd({
+        id: producto.id,
+        nombre: producto.nombre,
+        descripcion: producto.descripcion,
+        imagenPrincipal: producto.imagenPrincipal,
+        precio: producto.precio,
+        disponible: producto.disponible,
+        stock: producto.stock,
+        inventariable: producto.inventariable,
+      }),
+      breadcrumbJsonLd([
+        { name: 'Catálogo', path: '/' },
+        { name: producto.categoria ?? 'Catálogo', path: '/' },
+        { name: producto.nombre, path: `/producto/${producto.id}` },
+      ]),
+    ]
+  }, [producto])
+
+  useSeo({
+    title: producto ? `${producto.nombre} | Tienda Maxan` : 'Producto | Tienda Maxan',
+    description:
+      producto?.descripcion?.slice(0, 160) ||
+      'Detalle de producto en la Tienda Maxan: equipos, licencias y servicios de Maxan Sistemas.',
+    path: `/producto/${id}`,
+    image: producto?.imagenPrincipal ?? undefined,
+    jsonLd,
+  })
+
+  function agregar() {
+    if (!producto) return
+    add({
+      productoId: producto.id,
+      nombre: producto.nombre,
+      codigo: producto.codigo,
+      precio: producto.precio,
+      cantidad: Math.max(1, cantidad),
+      unidadMedida: producto.unidadMedida,
+    })
+    setAgregado(true)
+  }
+
+  const sinPrecio = producto ? producto.precio <= 0 : false
+
+  const disponibilidad = !producto
+    ? null
+    : sinPrecio
+      ? { texto: 'Consultar precio', clase: 'badge-info' }
+      : producto.disponible
+        ? {
+            texto: producto.inventariable ? `${producto.stock} en stock` : 'Disponible',
+            clase: 'badge-success',
+          }
+        : {
+            texto: producto.inventariable ? 'Agotado' : 'No disponible',
+            clase: 'badge-neutral',
+          }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <Header />
+    <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:py-10">
+      <nav aria-label="Migas de pan" className="text-sm text-maxan-text-secondary">
+        <ol className="flex flex-wrap items-center gap-2">
+          <li>
+            <Link to="/" className="underline-offset-4 hover:text-maxan-navy hover:underline">
+              Catálogo
+            </Link>
+          </li>
+          <li aria-hidden="true">/</li>
+          <li className="font-medium text-maxan-navy" aria-current="page">
+            {producto?.nombre ?? 'Producto'}
+          </li>
+        </ol>
+      </nav>
 
-      <main className="max-w-4xl mx-auto px-4 py-10 flex-1 w-full">
-        <Link to="/" className="text-sm text-brand hover:underline">
-          ← Volver al catálogo
-        </Link>
+      {loading && (
+        <p role="status" className="mt-8 text-maxan-text-secondary">
+          Cargando producto…
+        </p>
+      )}
 
-        {loading && <div className="mt-8 text-gray-500">Cargando producto…</div>}
-        {error && <div className="mt-8 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">{error}</div>}
+      {error && (
+        <div
+          role="alert"
+          className="mt-8 rounded-lg border border-maxan-danger bg-maxan-danger-soft px-4 py-3 text-sm font-medium text-maxan-danger"
+        >
+          {error}
+        </div>
+      )}
 
-        {!loading && !error && producto && (
-          <div className="mt-8 bg-white rounded-xl border border-gray-200 p-8">
-            <div className="flex flex-col lg:flex-row gap-8">
-              {/* Galería de imágenes */}
-              <div className="lg:w-1/2">
-                {imgActual ? (
-                  <img
-                    src={imgActual}
-                    alt={producto.nombre}
-                    className="w-full h-80 lg:h-96 object-contain bg-gray-50 rounded-lg"
-                  />
-                ) : (
-                  <div className="w-full h-80 lg:h-96 bg-gray-100 rounded-lg flex items-center justify-center">
-                    <span className="text-6xl text-gray-300">📦</span>
-                  </div>
-                )}
-                {imagenes.length > 1 && (
-                  <div className="flex gap-2 mt-3 overflow-x-auto">
-                    {imagenes.map((img, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => setImgSeleccionada(idx)}
-                        className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-colors ${
-                          idx === imgSeleccionada ? 'border-brand' : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        <img src={img.url} alt="" className="w-full h-full object-contain bg-gray-50" />
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+      {!loading && !error && producto && (
+        <div className="mt-8 grid gap-8 lg:grid-cols-2 lg:gap-12">
+          <div>
+            <div className="flex h-80 items-center justify-center rounded-xl border border-maxan-border bg-maxan-surface lg:h-96">
+              {imgActual ? (
+                <img
+                  src={imgActual}
+                  alt={producto.nombre}
+                  width={640}
+                  height={480}
+                  className="h-full w-full object-contain p-4"
+                />
+              ) : (
+                <svg
+                  width="72"
+                  height="72"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-maxan-border-strong"
+                  aria-hidden="true"
+                >
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <circle cx="9" cy="9" r="2"></circle>
+                  <path d="m21 15-4.35-4.35a2 2 0 0 0-2.83 0L3 21"></path>
+                </svg>
+              )}
+            </div>
 
-              {/* Info del producto */}
-              <div className="lg:w-1/2">
-                <span className="inline-block bg-gray-100 text-gray-500 text-xs font-medium px-2 py-1 rounded">
-                  {producto.categoria || 'Sin categoría'}
-                </span>
-                <h1 className="mt-4 text-3xl font-bold text-navy">{producto.nombre}</h1>
-                {producto.codigo && <p className="mt-1 text-sm text-gray-400">Ref. {producto.codigo}</p>}
-
-                <div className="mt-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                  <span className="text-3xl font-bold text-navy">{formatCOP(producto.precio)}</span>
-                  <span
-                    className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
-                      producto.disponible ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'
-                    }`}
+            {imagenes.length > 1 && (
+              <div
+                role="group"
+                aria-label="Imágenes del producto"
+                className="mt-3 flex gap-2 overflow-x-auto"
+              >
+                {imagenes.map((img, idx) => (
+                  <button
+                    key={img.url}
+                    type="button"
+                    onClick={() => setImgSeleccionada(idx)}
+                    aria-pressed={idx === imgSeleccionada}
+                    aria-label={`Ver imagen ${idx + 1} de ${imagenes.length}`}
+                    className={
+                      idx === imgSeleccionada
+                        ? 'flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md border-2 border-maxan-primary bg-maxan-surface'
+                        : 'flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md border-2 border-maxan-border bg-maxan-surface hover:border-maxan-border-strong'
+                    }
                   >
-                    {producto.disponible
-                      ? producto.inventariable
-                        ? `${producto.stock} en stock`
-                        : 'Disponible'
-                      : producto.inventariable
-                        ? 'Agotado'
-                        : 'No disponible'}
-                  </span>
-                </div>
-
-                <dl className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <dt className="text-gray-400">Unidad de medida</dt>
-                    <dd className="mt-1 font-medium text-navy">{producto.unidadMedida || 'UND'}</dd>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <dt className="text-gray-400">Precio por unidad</dt>
-                    <dd className="mt-1 font-medium text-navy">{formatCOP(producto.precio)}</dd>
-                  </div>
-                </dl>
-
-                {producto.descripcion && (
-                  <div className="mt-8">
-                    <h2 className="font-semibold text-navy">Descripción</h2>
-                    <p className="mt-2 text-gray-600 whitespace-pre-line">{producto.descripcion}</p>
-                  </div>
-                )}
-
-                <div className="mt-10">
-                  {producto.disponible ? (
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <button
-                        onClick={() => {
-                          add({
-                            productoId: producto.id,
-                            nombre: producto.nombre,
-                            codigo: producto.codigo,
-                            precio: producto.precio,
-                            unidadMedida: producto.unidadMedida,
-                          })
-                          setAdded(true)
-                        }}
-                        className="bg-brand text-white px-6 py-3 rounded-lg font-semibold hover:opacity-90 transition-opacity"
-                      >
-                        Agregar al carrito
-                      </button>
-                      {added && (
-                        <button
-                          onClick={() => navigate('/carrito')}
-                          className="px-6 py-3 rounded-lg font-semibold text-brand hover:underline"
-                        >
-                          Ver carrito →
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    <span className="inline-block bg-gray-100 text-gray-500 px-6 py-3 rounded-lg">
-                      Producto no disponible para cotización
-                    </span>
-                  )}
-                </div>
+                    <img src={img.url} alt="" className="h-full w-full object-contain p-1" />
+                  </button>
+                ))}
               </div>
+            )}
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-maxan-text-muted">
+              {producto.categoria ?? 'General'}
+            </p>
+            <h1 className="mt-2 text-3xl font-bold tracking-tight text-maxan-navy">
+              {producto.nombre}
+            </h1>
+            {producto.codigo && (
+              <p className="mt-2 text-sm text-maxan-text-muted">Referencia {producto.codigo}</p>
+            )}
+
+            <div className="mt-6 flex flex-wrap items-center gap-4">
+              <p className="text-3xl font-bold text-maxan-navy">
+                {sinPrecio ? 'Precio a consultar' : formatCOP(producto.precio)}
+              </p>
+              {disponibilidad && (
+                <span className={`badge ${disponibilidad.clase}`}>{disponibilidad.texto}</span>
+              )}
+            </div>
+
+            <dl className="mt-8 grid gap-4 sm:grid-cols-2">
+              <div className="rounded-lg border border-maxan-border bg-maxan-surface px-4 py-3">
+                <dt className="text-sm text-maxan-text-muted">Unidad de medida</dt>
+                <dd className="mt-1 font-semibold text-maxan-navy">
+                  {producto.unidadMedida || 'Unidad'}
+                </dd>
+              </div>
+              <div className="rounded-lg border border-maxan-border bg-maxan-surface px-4 py-3">
+                <dt className="text-sm text-maxan-text-muted">Precio por unidad</dt>
+                <dd className="mt-1 font-semibold text-maxan-navy">
+                  {sinPrecio ? 'A consultar' : formatCOP(producto.precio)}
+                </dd>
+              </div>
+            </dl>
+
+            {producto.descripcion && (
+              <section aria-labelledby="titulo-descripcion" className="mt-8">
+                <h2 id="titulo-descripcion" className="text-lg font-bold text-maxan-navy">
+                  Descripción
+                </h2>
+                <p className="prose-body mt-2 whitespace-pre-line">{producto.descripcion}</p>
+              </section>
+            )}
+
+            <div className="mt-10 border-t border-maxan-border pt-8">
+              {producto.disponible && !sinPrecio ? (
+                <>
+                  <div className="flex flex-wrap items-end gap-4">
+                    <div>
+                      <label htmlFor="cantidad" className="field-label">
+                        Cantidad
+                      </label>
+                      <input
+                        id="cantidad"
+                        type="number"
+                        inputMode="numeric"
+                        min={1}
+                        step={1}
+                        value={cantidad}
+                        onChange={(e) => setCantidad(Math.max(1, Number(e.target.value) || 1))}
+                        className="field-input w-28"
+                      />
+                    </div>
+                    <button type="button" onClick={agregar} className="btn btn-primary px-6">
+                      Agregar al carrito
+                    </button>
+                    <Link to="/carrito" className="btn btn-secondary px-6">
+                      Ver carrito
+                    </Link>
+                  </div>
+                  <p role="status" className="mt-3 text-sm font-medium text-maxan-success">
+                    {agregado
+                      ? `${producto.nombre} se agregó al carrito.`
+                      : ''}
+                  </p>
+                </>
+              ) : (
+                <div className="rounded-lg border border-maxan-border bg-maxan-surface-secondary px-4 py-4">
+                  <p className="font-semibold text-maxan-navy">
+                    {sinPrecio
+                      ? 'Este producto se cotiza a medida.'
+                      : 'Producto no disponible para cotización en este momento.'}
+                  </p>
+                  <p className="prose-body mt-1">
+                    {sinPrecio
+                      ? 'Escríbenos o pide la cotización desde el carrito con una referencia del producto.'
+                      : 'Vuelve a revisar el catálogo: el stock es informativo y puede cambiar.'}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
-        )}
-      </main>
+        </div>
+      )}
     </div>
   )
-}
-
-function formatCOP(valor: number) {
-  return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(valor)
 }

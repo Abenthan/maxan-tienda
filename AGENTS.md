@@ -6,8 +6,8 @@ Tienda online del ecosistema Maxan Sistemas en **tienda.maxansistemas.com** (pue
 ## Regla de documentación
 Actualizar **AGENTS.md** y **README.md** conforme avanza el desarrollo.
 
-## Estado actual (Fases 1 a la 4 — esqueleto + catálogo + login/registro SSO + carrito/cotizaciones, versionado; Fase 6 en preparación)
-- **Verificado**: `node --check` OK, `tsc -b && vite build` OK, `eslint` OK, `docker compose ... config` (dev) OK. Flujos de catálogo, SSO y pedidos probados punta a punta en `docker-compose.dev.yml` (auth dev en 5175/3006).
+## Estado actual (Fases 1 a la 7 — esqueleto + catálogo + login/registro SSO + carrito/cotizaciones, versionado, producción y **normalización de diseño/a11y/SEO**)
+- **Verificado**: `node --check` OK, `tsc -b && vite build` OK, `eslint` OK (0/0), `docker compose ... config` (dev) OK. Flujos de catálogo, SSO y pedidos probados punta a punta en `docker-compose.dev.yml` (auth dev en 5175/3006).
 - `backend/` — Express 5 + `pg` + `jsonwebtoken` + `cors`. `src/index.js` (servidor, `GET /health` con BD, `app.locals.pool`, `trust proxy`), `src/config/{db,auth}.js` (`auth.js` exige `JWT_SECRET` en prod), `src/middleware/auth.js` (`authenticate`/`authorizeRol`, idénticos al ERP). **Catálogo implementado** con capas `routes → controllers → services → repositories`:
   - `src/repositories/catalogoRepository.js` — `listar()`/`obtenerPorId(id)`/`categorias()`. JOIN de `tienda.productos_venta` (activos) con `inventario.productos` y stock a través de la vista `inventario.vw_stock_disponible` (**join por `vs.producto_id`**). `categorias()` lee `DISTINCT categoria` de `inventario.productos`.
   - `src/services/catalogoService.js` — shape estable para el frontend + cálculo de `disponible` (`precio > 0 && (!inventariable || stock > 0)`).
@@ -23,13 +23,23 @@ Actualizar **AGENTS.md** y **README.md** conforme avanza el desarrollo.
   - `src/lib/authSso.ts` — patrón SSO del ERP (`AUTH_DELEGATED`, `AUTH_URL`, `authLoginUrl`/`authRegisterUrl` con `app=tienda`, `redirectToAuthLogin/Register`, `fetchAuthSession`/`fetchAuthMe`/`authLogout`, tipos `SsoUser`/`SsoSession`).
   - `src/context/AuthContext.tsx` — proveedor de autenticación: token inicial desde URL `?token=`/localStorage; un solo efecto async que valida con `/auth/me` o restaura por cookie; `logout`.
   - `src/context/CartContext.tsx` — **carrito** persistido en localStorage (`maxan_tienda_carrito`): `items`, `add`, `remove`, `setCantidad`, `clear`, `total`, `count`.
-  - `src/components/Header.tsx` — barra compartida con **enlace al carrito (contador)** + registro/login SSO o identidad + cerrar sesión.
+  - `src/components/Layout.tsx` — cascarón común: skip link → `Header` → `<main id="contenido" tabIndex={-1}>` → `Footer`, + `ScrollToTop`.
+  - `src/components/Header.tsx` — header navy con **logo oficial blanco** (`images/logo-maxan-blanco.svg`), navegación (`aria-current="page"`), **enlace al carrito (contador)** y sesión (registro/login SSO o identidad + cerrar sesión). Sin elementos interactivos anidados.
+  - `src/components/Footer.tsx` — pie navy con logo, enlaces reales (sin placeholders) y la nota de que la cotización **no es un comprobante de pago**.
+  - `src/components/ProductCard.tsx` — tarjeta de producto: **un** enlace accesible (el título) + botón "Agregar al carrito"; la imagen es un enlace redundante (`aria-hidden` + `tabIndex={-1}`) para no duplicar el enlace en el árbol de accesibilidad.
+  - `src/lib/seo.ts` — `useSeo({title, description, path, image, jsonLd, noindex})` por ruta + helpers `breadcrumbJsonLd`, `productJsonLd`, `itemListJsonLd`. Mismo contrato que `maxanSistemas.com/src/lib/seo.js`.
+  - `src/lib/format.ts` — `formatCOP`, `formatFecha`, `formatFechaHora` (es-CO).
   - `src/main.tsx` — envuelve `<App>` con `<AuthProvider>` y `<CartProvider>`.
   - **Carrito/checkout (Fase 4)**: `src/pages/Carrito.tsx` — ruta `/carrito`; edita cantidades, observaciones opcionales, genera la cotización con `POST /api/pedidos` (exige sesión; si no hay, botón redirige al login SSO) y muestra confirmación al crearla.
-  - `src/pages/Catalogo.tsx` — grid de tarjetas con **botón "Agregar"** (detiene el navegador del link), filtro por categoría, estados de carga/error, separa disponibles vs agotados + `Header`.
-  - `src/pages/ProductoDetalle.tsx` — ruta `/producto/:id` con detalle, disponibilidad y **botón "Agregar al carrito"** (reemplaza el placeholder de Fase 2) + `Header`.
-  - `src/App.tsx` — rutas `/`, `/producto/:id`, `/carrito`; `*` → redirect a `/`.
-  - `src/index.css` — paleta brand (`--color-navy`, `--color-brand`); sin cambios.
+  - `src/pages/Catalogo.tsx` — hero + filtro por categoría (`aria-pressed`), grid de `ProductCard`, estados de carga/error, JSON-LD `ItemList`.
+  - `src/pages/ProductoDetalle.tsx` — ruta `/producto/:id` con galería, migas de pan, cantidad, disponibilidad y **botón "Agregar al carrito"**; JSON-LD `Product` + `BreadcrumbList`.
+  - `src/pages/Cotizaciones.tsx` — ruta `/cotizaciones`: mis cotizaciones (estado, fecha, total), detalle expandible y cancelación de las pendientes. Usa `fetchPedidos`/`fetchPedido`/`cancelarPedido` (ya existentes en `lib/api.ts`). `noindex`.
+  - `src/pages/NoEncontrada.tsx` — 404 real (`noindex`) en vez del redirect a `/`.
+  - `src/App.tsx` — rutas `/`, `/producto/:id`, `/carrito`, `/cotizaciones`, `*` → 404. `ProductoRoute` remonta el detalle por `key={id}` (estado limpio al cambiar de producto).
+  - `src/index.css` — **sistema de tokens del ecosistema** (`@theme` de Tailwind 4): `--color-maxan-*`, `--radius-maxan-*`, `--shadow-maxan-*` (mismos nombres y valores que `maxanSistemas.com`) + capa de componentes (`.skip-link`, `.btn*`, `.field-*`, `.card`, `.eyebrow`, `.section-title`, `.prose-body`, `.badge-*`). Sin colores literales en los componentes.
+  - `index.html` — `lang="es-CO"`, canonical, OG/Twitter, `theme-color`, manifest, favicons oficiales y JSON-LD estático (`Organization` + `WebSite`).
+  - `public/` — `images/logo.svg`, `images/logo-maxan-blanco.svg`, `images/og-tienda.jpg` (1200 × 630), `Logo-FAVICON.svg`, favicons PNG/ICO, `apple-touch-icon.png`, `icon-192/512.png`, `site.webmanifest`, `robots.txt`, `sitemap.xml`.
+  - `nginx.conf` — **configuración completa** (`events` + `http`): gzip, cabeceras de seguridad, proxy `/api/` y `/health`, SPA fallback, `index.html` sin caché, `/assets/` 1 año (llevan hash), imágenes/fuentes 30 días. El `Dockerfile` la copia a `/etc/nginx/nginx.conf`.
   - `frontend/.env.development` — `VITE_*` del dev: `VITE_AUTH_DELEGATED=true`, `VITE_AUTH_URL=http://localhost:5175`, `VITE_API_PROXY=http://localhost:3007`, `VITE_AUTH_SSO_PROXY=http://localhost:3006` (**ejecución sin Docker**: los proxies apuntan a `localhost`). En contenedor Docker dev usar `http://tienda-backend:3007` y `http://host.docker.internal:3006` (valores en `.env.dev`).
   - `vite.config.ts` — proxy `/api`→backend tienda y `/auth-sso`→backend auth (lee `VITE_API_PROXY` / `VITE_AUTH_SSO_PROXY`; en contenedor NO usar `127.0.0.1`).
   - `frontend/.env.production` — **versionado, sin secretos** (build de prod del Dockerfile): `VITE_AUTH_DELEGATED=true`, `VITE_AUTH_URL=https://auth.maxansistemas.com`. Sin este archivo el build de prod deja `VITE_AUTH_DELEGATED` undefined → no restaura sesión por cookie ni redirige al login en 401 (verificado en `dist/` que ya compila el SSO activo).
@@ -211,4 +221,70 @@ bash deploy.sh
 # Verificación local
 cd backend && node --check src/index.js
 cd frontend && npm run build && npm run lint
+```
+
+## Normalización de diseño, accesibilidad y SEO (2026-10-21)
+
+Tarea transversal sobre `frontend/` siguiendo `../diseño.md` y las skills `frontend-design`,
+`accessibility` y `seo`. **No se tocó backend, base de datos ni SSO**: solo frontend, assets,
+nginx y documentación.
+
+### Decisiones
+1. **Tokens compartidos**: el set `--maxan-*` es idéntico al de `maxanSistemas.com`
+   (mismos nombres y valores) para que un componente migrado entre apps no cambie.
+   Ningún color/radio/sombra literal en los componentes.
+2. **`tienda.cotizaciones` NO se mueve al futuro schema `crm`.** Contradice la propiedad de
+   esquemas de `../maxan-db/design.md` §5: la cotización es un artefacto comercial transaccional
+   (nace del carrito, la confirma un asesor), no una oportunidad de CRM. El futuro CRM será dueño
+   de `crm.*` y consumirá los eventos por el webhook a n8n. Documentado en
+   `../maxan-db/design.md` §5.1.
+3. **Sin FAB de WhatsApp**: el footer de la tienda indica que un asesor confirma la cotización;
+   las notificaciones automáticas pertenecen al CRM futuro, no a la tienda.
+4. **Imagen social**: `public/images/og-tienda.jpg` es la tarjeta propia de la tienda
+   (1200 × 630 JPG, 107 KB), producida según `../imagenes/imagenes-tienda.md` §3.1.
+5. **`/cotizaciones`** entra usando la API que ya existía (`fetchPedidos`, `fetchPedido`,
+   `cancelarPedido`) y que estaba sin usar.
+
+### Cambios
+- `src/index.css` reescrito: `@theme` con `--color-maxan-*` / `--radius-maxan-*` /
+  `--shadow-maxan-*` + `@layer components` (`.skip-link`, `.btn*`, `.field-*`, `.card`,
+  `.eyebrow`, `.section-title`, `.prose-body`, `.badge-*`), foco visible global, `scroll-margin-top`,
+  `prefers-reduced-motion`.
+- Componentes nuevos: `Layout.tsx` (skip link + `main#contenido`), `Footer.tsx`,
+  `ProductCard.tsx`, `ScrollToTop.tsx`. `Header.tsx` reescrito (logo oficial blanco, `aria-current`,
+  contador de carrito accesible, sin anidamiento de interactivos).
+- Páginas reescritas: `Catalogo.tsx` (hero, filtros `aria-pressed`, JSON-LD `ItemList`),
+  `ProductoDetalle.tsx` (galería, migas de pan, cantidad, JSON-LD `Product` + `BreadcrumbList`),
+  `Carrito.tsx` (controles ≥ 44 px, labels, `role="alert"`/`role="status"`). Nuevas:
+  `Cotizaciones.tsx` y `NoEncontrada.tsx`.
+- `src/lib/seo.ts` (puerto TS de `maxanSistemas.com/src/lib/seo.js`) y `src/lib/format.ts`.
+- `index.html`: `es-CO`, canonical, OG/Twitter, theme-color, manifest, favicons, JSON-LD
+  `Organization` + `WebSite`, `noscript`.
+- `public/`: logos (`logo.svg`, `logo-maxan-blanco.svg`), `og-tienda.jpg`, `Logo-FAVICON.svg`,
+  favicons PNG/ICO, `apple-touch-icon.png`, `icon-192/512.png`, `site.webmanifest`, `robots.txt`,
+  `sitemap.xml`. Eliminado el favicon inventado `favicon.svg`.
+- `nginx.conf` convertido en configuración completa (gzip, cabeceras de seguridad, caché
+  correcta: `index.html` sin caché, `/assets/` 1 año) y `Dockerfile` copiándolo a
+  `/etc/nginx/nginx.conf`.
+
+### Problemas resueltos
+- **`<button>` dentro de `<Link>`** en la tarjeta de producto (HTML inválido y foco duplicado
+  para lectores de pantalla) → un solo enlace accesible (el título) + botón.
+- **`index.html` cacheado 1 h** por `location /` con `max-age=3600` → ahora `expires -1`; los
+  assets con hash, 1 año.
+- **Rutas privadas indexables** (`/carrito`) → `noindex` por ruta + `Disallow` en `robots.txt`.
+- **404 inexistente**: `*` redirigía a `/` (el 404 era un 200 con el home) → `NoEncontrada.tsx`.
+- **Contraste**: `white/50` sobre navy (4.45:1) en "Cargando sesión…" → `white/70` (7.49:1);
+  badge del carrito en azul de marca sobre navy (2.67:1) → badge blanco con texto navy.
+- **Favicon inventado** (`favicon.svg` generado a mano) → marca oficial (`Logo-FAVICON.svg` +
+  PNG/ICO exportados).
+
+### Verificación
+```bash
+cd frontend
+npm run lint     # 0 errores
+npm run build    # tsc -b && vite build OK
+npm run preview  # http://localhost:4173
+npx lighthouse http://localhost:4173/ --only-categories=accessibility,seo \
+  --chrome-flags="--headless=new --no-sandbox"
 ```

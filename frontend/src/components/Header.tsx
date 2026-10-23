@@ -1,61 +1,103 @@
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useCart } from '../context/CartContext'
 import { redirectToAuthLogin, redirectToAuthRegister } from '../lib/authSso'
 
+const NAV = [
+  { to: '/', label: 'Catálogo' },
+  { to: '/cotizaciones', label: 'Cotizaciones' },
+]
+
 export default function Header() {
   const { user, loading, logout } = useAuth()
   const { count } = useCart()
+  const { pathname } = useLocation()
 
   function currentUrl() {
     return window.location.origin + window.location.pathname + window.location.search
   }
 
+  function esActual(to: string) {
+    return to === '/' ? pathname === '/' : pathname === to || pathname.startsWith(`${to}/`)
+  }
+
   return (
-    <header className="bg-navy text-white">
-      <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
-        <Link to="/" className="font-bold text-lg">
-          Tienda Maxan
+    <header className="sticky top-0 z-40 bg-maxan-navy text-white shadow-maxan-sm">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
+        <Link to="/" className="flex shrink-0 items-center">
+          <img
+            src="/images/logo-maxan-blanco.svg"
+            alt="Maxan Sistemas"
+            width={125}
+            height={32}
+            className="h-8 w-auto"
+          />
         </Link>
-        <div className="flex items-center gap-3">
+
+        <nav
+          aria-label="Principal"
+          className="order-last flex w-full items-center gap-1 overflow-x-auto sm:order-none sm:w-auto"
+        >
+          {NAV.map((item) => (
+            <Link
+              key={item.to}
+              to={item.to}
+              aria-current={esActual(item.to) ? 'page' : undefined}
+              className={
+                esActual(item.to)
+                  ? 'inline-flex min-h-11 items-center whitespace-nowrap rounded-md bg-white/15 px-3 text-sm font-semibold text-white'
+                  : 'inline-flex min-h-11 items-center whitespace-nowrap rounded-md px-3 text-sm font-semibold text-white/80 transition-colors hover:bg-white/10 hover:text-white'
+              }
+            >
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+
+        <div className="ml-auto flex items-center gap-2">
           <Link
             to="/carrito"
-            className="relative flex items-center gap-2 text-sm text-white/80 hover:text-white border border-white/30 px-3 py-1.5 rounded"
-            aria-label={`Carrito, ${count} artículos`}
+            className="btn btn-light relative px-3"
+            aria-label={`Carrito, ${count} ${count === 1 ? 'artículo' : 'artículos'}`}
           >
             <CartIcon />
             <span className="hidden sm:inline">Carrito</span>
             {count > 0 && (
-              <span className="absolute -top-2 -right-2 bg-brand text-white text-xs font-bold rounded-full min-w-[1.25rem] h-5 px-1 flex items-center justify-center">
+              <span
+                aria-hidden="true"
+                className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-xs font-bold text-maxan-navy"
+              >
                 {count}
               </span>
             )}
           </Link>
+
           {loading ? (
-            <span className="text-sm text-white/50">Cargando sesión…</span>
+            <span role="status" className="text-sm text-white/70">
+              Cargando sesión…
+            </span>
           ) : user ? (
             <>
-              <span className="text-sm text-white/80 hidden sm:inline">
+              <span className="hidden text-sm text-white/80 lg:inline">
                 Hola, {user.nombres || user.username}
               </span>
-              <button
-                onClick={logout}
-                className="text-sm text-white/80 hover:text-white border border-white/30 px-3 py-1 rounded"
-              >
+              <button type="button" onClick={logout} className="btn btn-light px-3">
                 Cerrar sesión
               </button>
             </>
           ) : (
             <>
               <button
+                type="button"
                 onClick={() => redirectToAuthRegister(currentUrl())}
-                className="text-sm text-white/80 hover:text-white"
+                className="btn btn-light hidden px-3 sm:inline-flex"
               >
-                Registrarse
+                Crear cuenta
               </button>
               <button
+                type="button"
                 onClick={() => redirectToAuthLogin(currentUrl())}
-                className="text-sm bg-brand text-white px-4 py-2 rounded-lg font-semibold"
+                className="btn btn-invert px-3"
               >
                 Iniciar sesión
               </button>
