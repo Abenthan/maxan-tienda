@@ -5,8 +5,11 @@ export const SITE_URL = import.meta.env.VITE_SITE_URL || 'https://tienda.maxansi
 export const SITE_NAME = 'Tienda Maxan'
 export const BRAND_NAME = 'Maxan Sistemas'
 
+/** Versión de la tarjeta social: al cambiarla se invalida la caché de los crawlers. */
+export const OG_IMAGE_VERSION = '20261023'
+
 /** Imagen social por defecto (tarjeta 1200 × 630 JPG: los bots no leen WebP). */
-export const OG_IMAGE = `${SITE_URL}/images/og-tienda.jpg`
+export const OG_IMAGE = `${SITE_URL}/images/og-tienda.jpg?v=${OG_IMAGE_VERSION}`
 
 /** Helper para apuntar la imagen social de cada ruta a su propia tarjeta. */
 export const ogImage = (file: string): string => `${SITE_URL}/images/${file}`
