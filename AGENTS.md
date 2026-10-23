@@ -241,7 +241,9 @@ nginx y documentación.
 3. **Sin FAB de WhatsApp**: el footer de la tienda indica que un asesor confirma la cotización;
    las notificaciones automáticas pertenecen al CRM futuro, no a la tienda.
 4. **Imagen social**: `public/images/og-tienda.jpg` es la tarjeta propia de la tienda
-   (1200 × 630 JPG, 107 KB), producida según `../imagenes/imagenes-tienda.md` §3.1.
+   (1200 × 630 JPG, 107 KB), producida según `../imagenes/imagenes-tienda.md` §3.1. La URL
+   lleva `?v=OG_IMAGE_VERSION` (`src/lib/seo.ts` + `index.html`) para invalidar la caché de
+   los crawlers sociales al reemplazar la imagen.
 5. **`/cotizaciones`** entra usando la API que ya existía (`fetchPedidos`, `fetchPedido`,
    `cancelarPedido`) y que estaba sin usar.
 

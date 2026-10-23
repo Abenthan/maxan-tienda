@@ -89,7 +89,9 @@ corporativa: mismos nombres de token, mismos componentes base y mismos patrones.
 - `VITE_SITE_URL` (opcional) define el origen público para canonical/OG; por defecto
   `https://tienda.maxansistemas.com`.
 - Imagen social: `public/images/og-tienda.jpg` (1200 × 630, JPG, 107 KB), tarjeta propia de
-  la tienda. Prompts y notas de producción en `../imagenes/imagenes-tienda.md`.
+  la tienda. Prompts y notas de producción en `../imagenes/imagenes-tienda.md`. Al reemplazarla,
+  subir `OG_IMAGE_VERSION` en `src/lib/seo.ts` y el `?v=` de `index.html` para invalidar la caché
+  de los crawlers sociales (Facebook/WhatsApp/LinkedIn).
 
 ## Rutas del frontend
 | Ruta | Página | Notas |
