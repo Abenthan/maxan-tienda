@@ -54,22 +54,34 @@ export default function Catalogo() {
   ]
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:py-10">
-      <section className="rounded-xl bg-maxan-navy px-6 py-10 text-white sm:px-10 sm:py-12">
-        <p className="eyebrow text-maxan-primary-ink">Tienda Maxan</p>
-        <h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
-          Equipos, licencias y servicios para tu empresa
-        </h1>
-        <p className="mt-4 max-w-2xl text-base leading-relaxed text-white/80">
-          Agrega al carrito y genera tu cotización en línea. Un asesor de Maxan confirma
-          disponibilidad, precio final y condiciones de venta.
-        </p>
+    <>
+      <section className="relative w-full overflow-hidden bg-maxan-navy text-white">
+        <img
+          src="/images/hero-tienda.webp"
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 h-full w-full object-cover object-center"
+          loading="eager"
+          decoding="async"
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-maxan-navy/95 via-maxan-navy/75 to-maxan-navy/40" />
+        <div className="relative mx-auto w-full max-w-6xl px-6 py-16 sm:px-10 sm:py-20 lg:py-24">
+          <p className="eyebrow text-maxan-primary-ink">Tienda Maxan</p>
+          <h1 className="mt-3 max-w-3xl text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
+            Equipos, licencias y servicios para tu empresa
+          </h1>
+          <p className="mt-4 max-w-2xl text-base leading-relaxed text-white/90 sm:text-lg">
+            Agrega al carrito y genera tu cotización en línea. Un asesor de Maxan confirma
+            disponibilidad, precio final y condiciones de venta.
+          </p>
+        </div>
       </section>
 
-      <section aria-labelledby="titulo-catalogo" className="mt-10">
-        <h2 id="titulo-catalogo" className="section-title">
-          Catálogo
-        </h2>
+      <div className="mx-auto w-full max-w-6xl px-4 py-10 sm:py-12">
+        <section aria-labelledby="titulo-catalogo">
+          <h2 id="titulo-catalogo" className="section-title">
+            Catálogo
+          </h2>
 
         {error && (
           <div
@@ -125,7 +137,8 @@ export default function Catalogo() {
             ))}
           </div>
         )}
-      </section>
-    </div>
+        </section>
+      </div>
+    </>
   )
 }
