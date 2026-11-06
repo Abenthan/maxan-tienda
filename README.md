@@ -163,7 +163,8 @@ El ERP referencia: `inventario.productos` (`id, codigo, nombre, categoria, inven
    la referencia del producto (más alternativa por correo); el detalle distingue producto
    inexistente, error de red y éxito; `useSeo` puede eliminar el canonical; nginx devuelve
    **404 real** en `/producto/:id` cuando el id no existe o está inactivo, gracias al nuevo
-   endpoint `GET /api/catalogo/productos/:id/existe`. *✅ completada (2026-11-06)*
+   endpoint `GET /api/catalogo/productos/:id/existe`. *✅ completada y desplegada en
+   producción (2026-11-06, commit `c65f5c8`)*
 
 ## Pendientes
 - **Fase 5** — webhook a n8n (`N8N_WEBHOOK_URL`) al crear cotización. Las notificaciones

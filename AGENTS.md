@@ -358,3 +358,8 @@ Ejecutado con **autorización explícita** para tocar backend y nginx de tienda.
   estados, SEO, reintento y 404). Lighthouse a11y/SEO **100** en `/`,
   `/producto/27` y `/producto/23`; SEO 66 esperado en `/producto/999999` por
   `noindex`. Corregido un contraste de 4,34:1 en la nota de contacto.
+  **Desplegado en producción el 2026-11-06** (commit `c65f5c8`, bundle
+  `index-XwBLDkYf.js`): ambos contenedores `healthy`; 200 en rutas y fichas
+  válidas, **404 con body de la SPA** en ids inexistentes/malformados, 200/403
+  en `/existe`, 401 sin token en `/api/pedidos`; 18 comprobaciones CDP por
+  HTTPS, incluido el producto 4 (sin precio en producción) con su CTA real.
