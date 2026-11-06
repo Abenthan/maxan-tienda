@@ -25,6 +25,23 @@ async function obtener(req, res, next) {
   }
 }
 
+// Nginx usa este endpoint como subpetición de `auth_request` para decidir si
+// /producto/:id existe. Devuelve 200 (existe) o 403 (no existe): auth_request
+// solo permite 2xx y propaga 403, que nginx convierte en 404 con el body de la
+// SPA. No es un endpoint de negocio para el frontend.
+async function existe(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isSafeInteger(id) || id <= 0) {
+      return res.status(403).json({ existe: false });
+    }
+    const ok = await catalogoService.existe(id);
+    return res.status(ok ? 200 : 403).json({ existe: ok });
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function categorias(req, res, next) {
   try {
     const categorias = await catalogoService.categorias();
@@ -34,4 +51,4 @@ async function categorias(req, res, next) {
   }
 }
 
-module.exports = { listar, obtener, categorias };
+module.exports = { listar, obtener, existe, categorias };

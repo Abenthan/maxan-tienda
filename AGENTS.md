@@ -9,10 +9,10 @@ Actualizar **AGENTS.md** y **README.md** conforme avanza el desarrollo.
 ## Estado actual (Fases 1 a la 7 — esqueleto + catálogo + login/registro SSO + carrito/cotizaciones, versionado, producción y **normalización de diseño/a11y/SEO**)
 - **Verificado**: `node --check` OK, `tsc -b && vite build` OK, `eslint` OK (0/0), `docker compose ... config` (dev) OK. Flujos de catálogo, SSO y pedidos probados punta a punta en `docker-compose.dev.yml` (auth dev en 5175/3006).
 - `backend/` — Express 5 + `pg` + `jsonwebtoken` + `cors`. `src/index.js` (servidor, `GET /health` con BD, `app.locals.pool`, `trust proxy`), `src/config/{db,auth}.js` (`auth.js` exige `JWT_SECRET` en prod), `src/middleware/auth.js` (`authenticate`/`authorizeRol`, idénticos al ERP). **Catálogo implementado** con capas `routes → controllers → services → repositories`:
-  - `src/repositories/catalogoRepository.js` — `listar()`/`obtenerPorId(id)`/`categorias()`. JOIN de `tienda.productos_venta` (activos) con `inventario.productos` y stock a través de la vista `inventario.vw_stock_disponible` (**join por `vs.producto_id`**). `categorias()` lee `DISTINCT categoria` de `inventario.productos`.
+  - `src/repositories/catalogoRepository.js` — `listar()`/`obtenerPorId(id)`/`existe(id)`/`categorias()`. JOIN de `tienda.productos_venta` (activos) con `inventario.productos` y stock a través de la vista `inventario.vw_stock_disponible` (**join por `vs.producto_id`**). `obtenerPorId` y `existe` filtran `pv.activo = TRUE`; `existe()` es un `SELECT EXISTS` ligero. `categorias()` lee `DISTINCT categoria` de `inventario.productos`.
   - `src/services/catalogoService.js` — shape estable para el frontend + cálculo de `disponible` (`precio > 0 && (!inventariable || stock > 0)`).
-  - `src/controllers/catalogoController.js` — valida `id` numérico, 404 en detalle inexistente.
-  - `src/routes/catalogo.js` — endpoints públicos `GET /productos`, `GET /productos/:id`, `GET /categorias`.
+  - `src/controllers/catalogoController.js` — valida `id` numérico, 404 en detalle inexistente; `existe()` devuelve **200 si existe / 403 si no** (contrato para `auth_request` de nginx, no es un endpoint de negocio).
+  - `src/routes/catalogo.js` — endpoints públicos `GET /productos`, `GET /productos/:id/existe`, `GET /productos/:id`, `GET /categorias`.
   - **Pedidos/cotizaciones implementados (Fase 4)** con capas `routes → controllers → services → repositories`, protegidos con `authenticate` + `authorizeRol("Cliente Tienda")`:
     - `src/repositories/pedidosRepository.js` — `crear()` (transacción: cabecera + items), `listarPorUsuario` (cabecera + `items` en una segunda consulta agrupada, sin N+1), `obtenerPorId`, `listarItems`, `cancelar()` (solo `pendiente`). Incluye `total` por `SUM(subtotal)`.
     - `src/services/pedidosService.js` — valida cada item contra el catálogo (existe, activo y disponible; el precio/nombre se recomponen desde la BD, nunca del cliente), calcula subtotales y shape `toCotizacion`.
@@ -26,20 +26,21 @@ Actualizar **AGENTS.md** y **README.md** conforme avanza el desarrollo.
   - `src/components/Layout.tsx` — cascarón común: skip link → `Header` → `<main id="contenido" tabIndex={-1}>` → `Footer`, + `ScrollToTop`.
   - `src/components/Header.tsx` — header navy con **logo oficial blanco** (`images/logo-maxan-blanco.svg`), navegación (`aria-current="page"`), **enlace al carrito (contador)** y sesión (registro/login SSO o identidad + cerrar sesión). Sin elementos interactivos anidados.
   - `src/components/Footer.tsx` — pie navy con logo, enlaces reales (sin placeholders) y la nota de que la cotización **no es un comprobante de pago**.
-  - `src/components/ProductCard.tsx` — tarjeta de producto: **un** enlace accesible (el título) + botón "Agregar al carrito"; la imagen es un enlace redundante (`aria-hidden` + `tabIndex={-1}`) para no duplicar el enlace en el árbol de accesibilidad.
-  - `src/lib/seo.ts` — `useSeo({title, description, path, image, jsonLd, noindex})` por ruta + helpers `breadcrumbJsonLd`, `productJsonLd`, `itemListJsonLd`. Mismo contrato que `maxanSistemas.com/src/lib/seo.js`.
+  - `src/components/ProductCard.tsx` — tarjeta de producto: **un** enlace accesible (el título) + botón "Agregar al carrito"; la imagen es un enlace redundante (`aria-hidden` + `tabIndex={-1}`) para no duplicar el enlace en el árbol de accesibilidad. Si `precio <= 0`, el CTA "Consultar precio" es un enlace real a WhatsApp con la referencia del producto (`target="_blank"` + `rel="noopener noreferrer"`), acompañado de "Ver ficha del producto".
+  - `src/lib/wa.ts` — **fuente única** del número de WhatsApp y del correo (espejo de `maxanSistemas.com/frontend/src/lib/wa.js`): `WA_NUMBER`/`WA_LINK`/`MAIL`/`MAIL_LINK`, `waLink()`, `referenciaProducto()`, `mensajeConsultaPrecio()`, `mensajeConsultaDisponibilidad()` y `mailLinkProducto()`. Los mensajes incluyen nombre, código y URL absoluta de la ficha.
+  - `src/lib/seo.ts` — `useSeo({title, description, path, image, jsonLd, noindex, canonical})` por ruta + helpers `breadcrumbJsonLd`, `productJsonLd`, `itemListJsonLd`. `canonical: null` **elimina** el canonical (404 y producto inexistente). Mismo contrato que `maxanSistemas.com/src/lib/seo.js`.
   - `src/lib/format.ts` — `formatCOP`, `formatFecha`, `formatFechaHora` (es-CO).
   - `src/main.tsx` — envuelve `<App>` con `<AuthProvider>` y `<CartProvider>`.
   - **Carrito/checkout (Fase 4)**: `src/pages/Carrito.tsx` — ruta `/carrito`; edita cantidades, observaciones opcionales, genera la cotización con `POST /api/pedidos` (exige sesión; si no hay, botón redirige al login SSO) y muestra confirmación al crearla.
   - `src/pages/Catalogo.tsx` — hero + filtro por categoría (`aria-pressed`), grid de `ProductCard`, estados de carga/error, JSON-LD `ItemList`.
-  - `src/pages/ProductoDetalle.tsx` — ruta `/producto/:id` con galería, migas de pan, cantidad, disponibilidad y **botón "Agregar al carrito"**; JSON-LD `Product` + `BreadcrumbList`.
+  - `src/pages/ProductoDetalle.tsx` — ruta `/producto/:id` con galería, migas de pan, cantidad y disponibilidad. Máquina de estados `loading | success | no-encontrado | error`: 400/404 del API abren el estado propio "producto no encontrado" (`noindex`, sin canonical ni JSON-LD), el error de red ofrece **Reintentar** y restaura canonical al recuperarse. Sin precio o sin disponibilidad muestra CTA real por WhatsApp y correo con la referencia; con precio y stock, botón "Agregar al carrito". JSON-LD `Product` + `BreadcrumbList` solo en `success`.
   - `src/pages/Cotizaciones.tsx` — ruta `/cotizaciones`: mis cotizaciones (estado, fecha, total y conteo real de items), detalle expandible con máquina de estados por id (`loading`/`success`/`error` + reintento, ignorando respuestas obsoletas), confirmación inline antes de cancelar y badge `Cancelada`. Separa carga, error y vacío, y bloquea la vista hasta resolver `authLoading`. `noindex`.
-  - `src/pages/NoEncontrada.tsx` — 404 real (`noindex`) en vez del redirect a `/`.
+  - `src/pages/NoEncontrada.tsx` — 404 real (`noindex` y sin canonical) en vez del redirect a `/`.
   - `src/App.tsx` — rutas `/`, `/producto/:id`, `/carrito`, `/cotizaciones`, `*` → 404. `ProductoRoute` remonta el detalle por `key={id}` (estado limpio al cambiar de producto).
   - `src/index.css` — **sistema de tokens del ecosistema** (`@theme` de Tailwind 4): `--color-maxan-*`, `--radius-maxan-*`, `--shadow-maxan-*` (mismos nombres y valores que `maxanSistemas.com`) + capa de componentes (`.skip-link`, `.btn*`, `.field-*`, `.card`, `.eyebrow`, `.section-title`, `.prose-body`, `.badge-*`). Sin colores literales en los componentes. Los bordes de controles (`.field-input`, `.btn-secondary`, `.btn-ghost`) usan `--color-maxan-border-control` (≥3:1); `border`/`border-strong` quedan para decoración.
   - `index.html` — `lang="es-CO"`, canonical, OG/Twitter, `theme-color`, manifest, favicons oficiales y JSON-LD estático (`Organization` + `WebSite`).
   - `public/` — `images/logo.svg`, `images/logo-maxan-blanco.svg`, `images/og-tienda.jpg` (1200 × 630), `Logo-FAVICON.svg`, favicons PNG/ICO, `apple-touch-icon.png`, `icon-192/512.png`, `site.webmanifest`, `robots.txt`, `sitemap.xml`.
-  - `nginx.conf` — **configuración completa** (`events` + `http`): gzip, cabeceras de seguridad, proxy `/api/` y `/health`, SPA fallback, `index.html` sin caché, `/assets/` 1 año (llevan hash), imágenes/fuentes 30 días. El `Dockerfile` la copia a `/etc/nginx/nginx.conf`.
+  - `nginx.conf` — **configuración completa** (`events` + `http`): gzip, cabeceras de seguridad, `resolver 127.0.0.11` (DNS de Docker, requerido por el `proxy_pass` con variable del `auth_request`), proxy `/api/` y `/health`, SPA fallback, `index.html` sin caché, `/assets/` 1 año (llevan hash), imágenes/fuentes 30 días. **404 real de producto**: `location ~ ^/producto/([0-9]+)/?$` hace `auth_request /_existe_producto` (subpetición a `GET /api/catalogo/productos/:id/existe`); 403 → `error_page 403 =404 /index.html` sirve la SPA con estado 404. Los ids malformados (`/producto/abc`, `/producto/1/x`, `/producto`) caen en un location propio que también devuelve 404 con el body de la SPA. Si el backend falla, `error_page 500 502 503 504 =200 /index.html` deja que el cliente muestre su error. El `Dockerfile` la copia a `/etc/nginx/nginx.conf`.
   - `frontend/.env.development` — `VITE_*` del dev: `VITE_AUTH_DELEGATED=true`, `VITE_AUTH_URL=http://localhost:5175`, `VITE_API_PROXY=http://localhost:3007`, `VITE_AUTH_SSO_PROXY=http://localhost:3006` (**ejecución sin Docker**: los proxies apuntan a `localhost`). En contenedor Docker dev usar `http://tienda-backend:3007` y `http://host.docker.internal:3006` (valores en `.env.dev`).
   - `vite.config.ts` — proxy `/api`→backend tienda y `/auth-sso`→backend auth (lee `VITE_API_PROXY` / `VITE_AUTH_SSO_PROXY`; en contenedor NO usar `127.0.0.1`).
   - `frontend/.env.production` — **versionado, sin secretos** (build de prod del Dockerfile): `VITE_AUTH_DELEGATED=true`, `VITE_AUTH_URL=https://auth.maxansistemas.com`. Sin este archivo el build de prod deja `VITE_AUTH_DELEGATED` undefined → no restaura sesión por cookie ni redirige al login en 401 (verificado en `dist/` que ya compila el SSO activo).
@@ -74,7 +75,8 @@ Actualizar **AGENTS.md** y **README.md** conforme avanza el desarrollo.
 |---|---|---|---|
 | `GET` | `/health` | Público | Healthcheck con BD |
 | `GET` | `/api/catalogo/productos` | Público | **Implementado** — productos en venta + stock + `imagenPrincipal` (URL de R2) |
-| `GET` | `/api/catalogo/productos/:id` | Público | **Implementado** — detalle producto + `imagenes[]` (todas las fotos ordenadas) |
+| `GET` | `/api/catalogo/productos/:id` | Público | **Implementado** — detalle producto + `imagenes[]` (todas las fotos ordenadas); 404 si no existe o está inactivo |
+| `GET` | `/api/catalogo/productos/:id/existe` | Público | **Implementado** — 200 si existe y está activo, 403 si no. Lo consume nginx (`auth_request`) para devolver 404 real en `/producto/:id` |
 | `GET` | `/api/catalogo/categorias` | Público | **Implementado** — categorías del catálogo |
 | `GET` | `/api/pedidos` | JWT Cliente Tienda | **Implementado** — mis cotizaciones |
 | `POST` | `/api/pedidos` | JWT Cliente Tienda | **Implementado** — crear cotización (estado `pendiente`) |
@@ -318,3 +320,41 @@ npx lighthouse http://localhost:4173/ --only-categories=accessibility,seo \
   Lighthouse a11y **100** en `/cotizaciones` (SEO 69 esperado por `noindex`).
   **Desplegado en producción el 2026-11-06** (commit `af62487`); `/cotizaciones`
   responde 200 con el bundle nuevo y `/api/pedidos` sin token responde 401.
+
+## WP-12 — CTA de consulta y producto inexistente (2026-11-06)
+
+Ejecutado con **autorización explícita** para tocar backend y nginx de tienda.
+
+- **CTA real**: `src/lib/wa.ts` es la fuente única del WhatsApp/email (mismo número y
+  correo que la web corporativa). `ProductCard` y `ProductoDetalle` sustituyen el
+  "Consultar precio" que solo llevaba a la ficha por un enlace a `wa.me` con mensaje
+  precargado (nombre, código de referencia y URL absoluta de la ficha), alternativa
+  `mailto:` y datos de contacto visibles. Los enlaces externos usan
+  `target="_blank"`, `rel="noopener noreferrer"` y aviso `sr-only`. Sin precio o sin
+  stock no se ofrece "Agregar al carrito".
+- **Producto inexistente**: `ProductoDetalle` distingue `loading | success |
+  no-encontrado | error`. Un 400 (id malformado) o 404 del API abre un estado propio
+  con `noindex`, **sin canonical**, sin JSON-LD `Product` y sin alerta de red; el
+  error de red ofrece **Reintentar** y restaura canonical al recuperarse.
+  `useSeo` acepta `canonical: null` para eliminar el canonical (también lo usa
+  `NoEncontrada`). `catalogoRepository.obtenerPorId()` ahora excluye productos con
+  `pv.activo = FALSE`.
+- **404 real en nginx**: nuevo `GET /api/catalogo/productos/:id/existe` (200/403,
+  `SELECT EXISTS` ligero). `nginx.conf` añade `resolver 127.0.0.11` y un
+  `auth_request` para `/producto/(digitos)/?` cuya subpetición construye el
+  `proxy_pass` con el id; 403 → `error_page 403 =404 /index.html` (body de la SPA con
+  estado 404). Los ids malformados tienen su propio location con el mismo 404. Si el
+  backend cae, `error_page 500 502 503 504 =200 /index.html` deja que el cliente
+  muestre su estado de error. Verificado antes que `nginx:alpine` incluye
+  `--with-http_auth_request_module` y que las variables `set` se heredan en la
+  subpetición.
+- **Verificación**: `node --check` OK, `npm run lint` 0/0, `npm run build` OK
+  (JS 321,92 kB / gzip 102,74 kB). Imagen de producción probada en Docker sobre la
+  red del backend: 200 en `/`, `/carrito`, `/cotizaciones`, `/producto/27`,
+  `/producto/23` y `/producto/27/`; **404** en `/producto/999999`, `/producto/15`
+  (inactivo), `/producto/abc`, `/producto` y `/producto/1/x`, siempre con el body de
+  la SPA; `/api/.../27/existe` 200 y `/999999/existe` 403; con el backend detenido
+  `/producto/27` vuelve a 200. 40 comprobaciones con Chrome headless/CDP (CTA,
+  estados, SEO, reintento y 404). Lighthouse a11y/SEO **100** en `/`,
+  `/producto/27` y `/producto/23`; SEO 66 esperado en `/producto/999999` por
+  `noindex`. Corregido un contraste de 4,34:1 en la nota de contacto.

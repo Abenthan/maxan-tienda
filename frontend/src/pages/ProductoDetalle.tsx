@@ -1,16 +1,34 @@
 import { useEffect, useMemo, useState } from 'react'
+import axios from 'axios'
 import { Link, useParams } from 'react-router-dom'
 import { useCart } from '../context/CartContext'
 import { fetchProducto, type Producto } from '../lib/api'
 import { formatCOP } from '../lib/format'
 import { breadcrumbJsonLd, productJsonLd, useSeo } from '../lib/seo'
+import {
+  MAIL,
+  WA_DISPLAY,
+  mailLinkProducto,
+  mensajeConsultaDisponibilidad,
+  mensajeConsultaPrecio,
+  referenciaProducto,
+  waLink,
+} from '../lib/wa'
+
+type Resultado =
+  | { status: 'loading' }
+  | { status: 'success'; producto: Producto }
+  | { status: 'no-encontrado' }
+  | { status: 'error'; mensaje: string }
+
+const DESCRIPCION_GENERICA =
+  'Detalle de producto en la Tienda Maxan: equipos, licencias y servicios de Maxan Sistemas.'
 
 export default function ProductoDetalle() {
   const { id } = useParams<{ id: string }>()
   const { add } = useCart()
-  const [resultado, setResultado] = useState<{ producto: Producto | null; error: string | null } | null>(
-    null,
-  )
+  const [resultado, setResultado] = useState<Resultado>({ status: 'loading' })
+  const [intento, setIntento] = useState(0)
   const [agregado, setAgregado] = useState(false)
   const [cantidad, setCantidad] = useState(1)
   const [imgSeleccionada, setImgSeleccionada] = useState(0)
@@ -19,19 +37,32 @@ export default function ProductoDetalle() {
     let active = true
     fetchProducto(id!)
       .then((p) => {
-        if (active) setResultado({ producto: p, error: null })
+        if (active) setResultado({ status: 'success', producto: p })
       })
-      .catch(() => {
-        if (active) setResultado({ producto: null, error: 'No se pudo cargar el producto.' })
+      .catch((err) => {
+        if (!active) return
+        const status = axios.isAxiosError(err) ? err.response?.status : undefined
+        // 400 = id malformado; 404 = no existe o está inactivo. Ambos son
+        // "producto no encontrado" para el usuario (nginx ya devuelve 404).
+        const noExiste = status === 400 || status === 404
+        setResultado(
+          noExiste
+            ? { status: 'no-encontrado' }
+            : {
+                status: 'error',
+                mensaje: 'No se pudo cargar el producto. Revisa tu conexión e inténtalo de nuevo.',
+              },
+        )
       })
     return () => {
       active = false
     }
-  }, [id])
+  }, [id, intento])
 
-  const producto = resultado?.producto ?? null
-  const error = resultado?.error ?? null
-  const loading = resultado === null
+  const producto = resultado.status === 'success' ? resultado.producto : null
+  const noEncontrado = resultado.status === 'no-encontrado'
+  const error = resultado.status === 'error' ? resultado.mensaje : null
+  const loading = resultado.status === 'loading'
 
   const imagenes = producto?.imagenes ?? []
   const imgActual = imagenes[imgSeleccionada]?.url ?? producto?.imagenPrincipal ?? null
@@ -57,15 +88,31 @@ export default function ProductoDetalle() {
     ]
   }, [producto])
 
+  // Un producto inexistente nunca debe dejar una canonical indexable ni ficha
+  // JSON-LD: se marca noindex y se elimina el canonical.
+  const sinCanonical = noEncontrado || error !== null
   useSeo({
-    title: producto ? `${producto.nombre} | Tienda Maxan` : 'Producto | Tienda Maxan',
+    title: producto
+      ? `${producto.nombre} | Tienda Maxan`
+      : noEncontrado
+        ? 'Producto no encontrado | Tienda Maxan'
+        : 'Producto | Tienda Maxan',
     description:
       producto?.descripcion?.slice(0, 160) ||
-      'Detalle de producto en la Tienda Maxan: equipos, licencias y servicios de Maxan Sistemas.',
-    path: `/producto/${id}`,
+      (noEncontrado
+        ? 'Este producto ya no está en el catálogo de la Tienda Maxan.'
+        : DESCRIPCION_GENERICA),
+    path: noEncontrado ? '/404' : `/producto/${producto?.id ?? id}`,
     image: producto?.imagenPrincipal ?? undefined,
     jsonLd,
+    noindex: sinCanonical,
+    canonical: sinCanonical ? null : undefined,
   })
+
+  function reintentar() {
+    setResultado({ status: 'loading' })
+    setIntento((n) => n + 1)
+  }
 
   function agregar() {
     if (!producto) return
@@ -96,6 +143,20 @@ export default function ProductoDetalle() {
             clase: 'badge-neutral',
           }
 
+  const consulta = producto
+    ? {
+        id: producto.id,
+        nombre: producto.nombre,
+        codigo: producto.codigo,
+      }
+    : null
+
+  const mensaje = consulta
+    ? sinPrecio
+      ? mensajeConsultaPrecio(consulta)
+      : mensajeConsultaDisponibilidad(consulta)
+    : ''
+
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:py-10">
       <nav aria-label="Migas de pan" className="text-sm text-maxan-text-secondary">
@@ -107,7 +168,7 @@ export default function ProductoDetalle() {
           </li>
           <li aria-hidden="true">/</li>
           <li className="font-medium text-maxan-navy" aria-current="page">
-            {producto?.nombre ?? 'Producto'}
+            {producto?.nombre ?? (noEncontrado ? 'Producto no encontrado' : 'Producto')}
           </li>
         </ol>
       </nav>
@@ -121,13 +182,51 @@ export default function ProductoDetalle() {
       {error && (
         <div
           role="alert"
-          className="mt-8 rounded-lg border border-maxan-danger bg-maxan-danger-soft px-4 py-3 text-sm font-medium text-maxan-danger"
+          className="mt-8 rounded-lg border border-maxan-danger bg-maxan-danger-soft px-4 py-3"
         >
-          {error}
+          <p className="text-sm font-medium text-maxan-danger">{error}</p>
+          <button type="button" onClick={reintentar} className="btn btn-secondary mt-3 px-4">
+            Reintentar
+          </button>
         </div>
       )}
 
-      {!loading && !error && producto && (
+      {noEncontrado && (
+        <section aria-labelledby="titulo-no-encontrado" className="card mt-8 px-6 py-12 text-center">
+          <p className="eyebrow">Producto no encontrado</p>
+          <h1
+            id="titulo-no-encontrado"
+            className="mt-3 text-3xl font-bold tracking-tight text-maxan-navy"
+          >
+            Este producto ya no está en el catálogo
+          </h1>
+          <p className="prose-body mx-auto mt-4 max-w-lg">
+            Puede que haya cambiado de referencia o que ya no esté a la venta. Escríbenos y te
+            ayudamos a encontrar una alternativa.
+          </p>
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
+            <Link to="/" className="btn btn-primary px-6">
+              Ir al catálogo
+            </Link>
+            <a
+              href={waLink(
+                `Hola, buscaba un producto en la Tienda Maxan pero la ficha ya no está disponible (${id}). ¿Me pueden ayudar?`,
+              )}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-secondary px-6"
+            >
+              Consultar por WhatsApp
+              <span className="sr-only"> (se abre en una pestaña nueva)</span>
+            </a>
+            <Link to="/cotizaciones" className="btn btn-ghost px-6">
+              Ver mis cotizaciones
+            </Link>
+          </div>
+        </section>
+      )}
+
+      {producto && (
         <div className="mt-8 grid gap-8 lg:grid-cols-2 lg:gap-12">
           <div>
             <div className="flex h-80 items-center justify-center rounded-xl border border-maxan-border bg-maxan-surface lg:h-96">
@@ -256,24 +355,52 @@ export default function ProductoDetalle() {
                     </Link>
                   </div>
                   <p role="status" className="mt-3 text-sm font-medium text-maxan-success">
-                    {agregado
-                      ? `${producto.nombre} se agregó al carrito.`
-                      : ''}
+                    {agregado ? `${producto.nombre} se agregó al carrito.` : ''}
                   </p>
                 </>
               ) : (
-                <div className="rounded-lg border border-maxan-border bg-maxan-surface-secondary px-4 py-4">
-                  <p className="font-semibold text-maxan-navy">
+                <section
+                  aria-labelledby="titulo-consulta"
+                  className="rounded-lg border border-maxan-border bg-maxan-surface-secondary px-5 py-5"
+                >
+                  <h2 id="titulo-consulta" className="text-lg font-bold text-maxan-navy">
                     {sinPrecio
                       ? 'Este producto se cotiza a medida.'
                       : 'Producto no disponible para cotización en este momento.'}
-                  </p>
-                  <p className="prose-body mt-1">
+                  </h2>
+                  <p className="prose-body mt-2">
                     {sinPrecio
-                      ? 'Escríbenos o pide la cotización desde el carrito con una referencia del producto.'
-                      : 'Vuelve a revisar el catálogo: el stock es informativo y puede cambiar.'}
+                      ? `Escríbenos con la referencia ${referenciaProducto(consulta!)} y un asesor te confirma precio, disponibilidad y condiciones de venta.`
+                      : 'El stock es informativo y puede cambiar. Escríbenos y te confirmamos disponibilidad y alternativas.'}
                   </p>
-                </div>
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <a
+                      href={waLink(mensaje)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn-primary px-5"
+                    >
+                      Consultar por WhatsApp
+                      <span className="sr-only"> (se abre en una pestaña nueva)</span>
+                    </a>
+                    <a
+                      href={mailLinkProducto(
+                        `Consulta sobre ${referenciaProducto(consulta!)}`,
+                        mensaje,
+                      )}
+                      className="btn btn-secondary px-5"
+                    >
+                      Escribir por correo
+                    </a>
+                    <Link to="/" className="btn btn-ghost px-5">
+                      Volver al catálogo
+                    </Link>
+                  </div>
+                  <p className="mt-3 text-sm text-maxan-text-secondary">
+                    También puedes escribirnos a {MAIL} o al {WA_DISPLAY}. Un asesor confirma el
+                    valor final antes de facturar.
+                  </p>
+                </section>
               )}
             </div>
           </div>

@@ -7,6 +7,7 @@ export default function NoEncontrada() {
     description: 'La página que buscas no existe o cambió de dirección.',
     path: '/404',
     noindex: true,
+    canonical: null,
   })
 
   return (

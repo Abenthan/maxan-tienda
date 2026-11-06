@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useCart } from '../context/CartContext'
 import type { Producto } from '../lib/api'
 import { formatCOP } from '../lib/format'
+import { mensajeConsultaPrecio, waLink } from '../lib/wa'
 
 export default function ProductCard({ producto }: { producto: Producto }) {
   const { add } = useCart()
@@ -82,11 +83,22 @@ export default function ProductCard({ producto }: { producto: Producto }) {
           {sinPrecio ? 'Precio a consultar' : formatCOP(producto.precio)}
         </p>
 
-        <div className="mt-auto">
+        <div className="mt-auto space-y-2">
           {sinPrecio ? (
-            <Link to={`/producto/${producto.id}`} className="btn btn-secondary w-full px-3">
-              Consultar precio
-            </Link>
+            <>
+              <a
+                href={waLink(mensajeConsultaPrecio(producto))}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`Consultar el precio de ${producto.nombre} por WhatsApp (se abre en una pestaña nueva)`}
+                className="btn btn-primary w-full px-3"
+              >
+                Consultar precio
+              </a>
+              <Link to={`/producto/${producto.id}`} className="btn btn-secondary w-full px-3">
+                Ver ficha del producto
+              </Link>
+            </>
           ) : agotado ? (
             <button type="button" disabled className="btn btn-primary w-full px-3">
               Sin stock

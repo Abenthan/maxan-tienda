@@ -39,10 +39,26 @@ async function listar() {
 async function obtenerPorId(id) {
   const { rows } = await pool.query(
     `${SELECT_PRODUCTOS}
-     WHERE p.id = $1`,
+     WHERE p.id = $1 AND pv.activo = TRUE`,
     [id]
   );
   return rows[0] || null;
+}
+
+// Comprobación ligera para nginx (auth_request): ¿existe y está activo el
+// producto? No carga imágenes ni stock: solo decide si la ficha es indexable.
+// Se usa en GET /api/catalogo/productos/:id/existe (200 = sí, 403 = no).
+async function existe(id) {
+  const { rows } = await pool.query(
+    `SELECT EXISTS(
+       SELECT 1
+       FROM tienda.productos_venta pv
+       JOIN inventario.productos p ON p.id = pv.producto_id
+       WHERE p.id = $1 AND pv.activo = TRUE
+     ) AS existe`,
+    [id]
+  );
+  return Boolean(rows[0]?.existe);
 }
 
 async function obtenerImagenes(productoId) {
@@ -66,4 +82,4 @@ async function categorias() {
   return rows.map((r) => r.categoria);
 }
 
-module.exports = { listar, obtenerPorId, obtenerImagenes, categorias };
+module.exports = { listar, obtenerPorId, existe, obtenerImagenes, categorias };

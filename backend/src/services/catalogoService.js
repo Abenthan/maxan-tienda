@@ -42,8 +42,12 @@ async function obtenerPorId(id) {
   return producto;
 }
 
+async function existe(id) {
+  return catalogoRepository.existe(id);
+}
+
 async function categorias() {
   return catalogoRepository.categorias();
 }
 
-module.exports = { listar, obtenerPorId, categorias };
+module.exports = { listar, obtenerPorId, existe, categorias };

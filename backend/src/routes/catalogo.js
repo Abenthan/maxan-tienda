@@ -4,6 +4,7 @@ const controller = require("../controllers/catalogoController");
 const router = express.Router();
 
 router.get("/productos", controller.listar);
+router.get("/productos/:id/existe", controller.existe);
 router.get("/productos/:id", controller.obtener);
 router.get("/categorias", controller.categorias);
 

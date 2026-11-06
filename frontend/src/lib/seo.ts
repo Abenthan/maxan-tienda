@@ -39,6 +39,10 @@ function setCanonical(url: string): void {
   el.setAttribute('href', url)
 }
 
+function removeCanonical(): void {
+  document.head.querySelectorAll('link[rel="canonical"]').forEach((el) => el.remove())
+}
+
 export interface SeoOptions {
   title?: string
   description?: string
@@ -50,6 +54,12 @@ export interface SeoOptions {
   jsonLd?: JsonLd[]
   /** Las páginas privadas (carrito, cotizaciones, 404) no se indexan. */
   noindex?: boolean
+  /**
+   * URL canónica absoluta. `null` elimina el canonical: se usa en estados de
+   * producto inexistente y 404, donde apuntar a la URL inválida la haría
+   * indexable. Por defecto se deriva de `path`.
+   */
+  canonical?: string | null
 }
 
 /**
@@ -66,6 +76,7 @@ export function useSeo({
   image = OG_IMAGE,
   jsonLd = [],
   noindex = false,
+  canonical = undefined,
 }: SeoOptions = {}): void {
   // Se serializa el JSON-LD para depender de su contenido y no de la
   // identidad del array (evita re-ejecutar el efecto en cada render).
@@ -90,7 +101,9 @@ export function useSeo({
     setMeta('meta[name="twitter:description"]', { name: 'twitter:description', content: description })
     setMeta('meta[name="twitter:image"]', { name: 'twitter:image', content: image })
 
-    setCanonical(url)
+    if (canonical === null) removeCanonical()
+    else if (canonical) setCanonical(canonical)
+    else setCanonical(url)
 
     document.querySelectorAll('script[data-seo-jsonld]').forEach((node) => node.remove())
 
@@ -102,7 +115,7 @@ export function useSeo({
       script.textContent = JSON.stringify(data)
       document.head.appendChild(script)
     })
-  }, [title, description, path, image, jsonLdKey, noindex])
+  }, [title, description, path, image, jsonLdKey, noindex, canonical])
 }
 
 /** Grafo de navegación entre las páginas internas de la tienda. */
