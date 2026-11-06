@@ -50,6 +50,13 @@ export interface SeoOptions {
   path?: string
   /** URL absoluta de la imagen social. */
   image?: string
+  /** Alt de la imagen social (og:image:alt). */
+  imageAlt?: string
+  /** Dimensiones de la imagen social (og:image:width/height). */
+  imageWidth?: number
+  imageHeight?: number
+  /** Tipo de contenido Open Graph (p. ej. "product" si es un producto). */
+  ogType?: string
   /** Objetos schema.org de la página. */
   jsonLd?: JsonLd[]
   /** Las páginas privadas (carrito, cotizaciones, 404) no se indexan. */
@@ -74,6 +81,10 @@ export function useSeo({
   description = DEFAULT_DESCRIPTION,
   path = '/',
   image = OG_IMAGE,
+  imageAlt,
+  imageWidth,
+  imageHeight,
+  ogType = 'website',
   jsonLd = [],
   noindex = false,
   canonical = undefined,
@@ -95,7 +106,21 @@ export function useSeo({
     setMeta('meta[property="og:title"]', { property: 'og:title', content: title })
     setMeta('meta[property="og:description"]', { property: 'og:description', content: description })
     setMeta('meta[property="og:url"]', { property: 'og:url', content: url })
+    setMeta('meta[property="og:type"]', { property: 'og:type', content: ogType })
     setMeta('meta[property="og:image"]', { property: 'og:image', content: image })
+    if (imageAlt) setMeta('meta[property="og:image:alt"]', { property: 'og:image:alt', content: imageAlt })
+    if (imageWidth) {
+      setMeta('meta[property="og:image:width"]', {
+        property: 'og:image:width',
+        content: String(imageWidth),
+      })
+    }
+    if (imageHeight) {
+      setMeta('meta[property="og:image:height"]', {
+        property: 'og:image:height',
+        content: String(imageHeight),
+      })
+    }
     setMeta('meta[name="twitter:card"]', { name: 'twitter:card', content: 'summary_large_image' })
     setMeta('meta[name="twitter:title"]', { name: 'twitter:title', content: title })
     setMeta('meta[name="twitter:description"]', { name: 'twitter:description', content: description })
@@ -115,7 +140,25 @@ export function useSeo({
       script.textContent = JSON.stringify(data)
       document.head.appendChild(script)
     })
-  }, [title, description, path, image, jsonLdKey, noindex, canonical])
+  }, [title, description, path, image, imageAlt, imageWidth, imageHeight, ogType, jsonLdKey, noindex, canonical])
+}
+
+/**
+ * Completa `og:image:width/height` con las dimensiones reales de la imagen
+ * del producto una vez el navegador las conoce (`naturalWidth/Height` al
+ * terminar de cargar). Los bots que no ejecutan JS siguen leyendo los tags
+ * estáticos; los que sí lo hacen obtienen dimensiones correctas.
+ */
+export function setOgImageSize(width: number, height: number): void {
+  if (!width || !height) return
+  setMeta('meta[property="og:image:width"]', {
+    property: 'og:image:width',
+    content: String(width),
+  })
+  setMeta('meta[property="og:image:height"]', {
+    property: 'og:image:height',
+    content: String(height),
+  })
 }
 
 /** Grafo de navegación entre las páginas internas de la tienda. */
@@ -135,6 +178,7 @@ export function breadcrumbJsonLd(items: { name: string; path: string }[]): JsonL
 export interface ProductoSeo {
   id: number
   nombre: string
+  codigo: string | null
   descripcion: string | null
   imagenPrincipal: string | null
   precio: number
@@ -151,18 +195,25 @@ export function productJsonLd(producto: ProductoSeo): JsonLd {
     name: producto.nombre,
     description: producto.descripcion || producto.nombre,
     image: producto.imagenPrincipal ? [producto.imagenPrincipal] : undefined,
-    sku: String(producto.id),
+    // sku real: el código del ERP (p. ej. "BLE-025"), no el id interno.
+    sku: producto.codigo || String(producto.id),
+    productID: producto.codigo ? `sku:${producto.codigo}` : undefined,
     brand: { '@type': 'Brand', name: BRAND_NAME },
-    offers: {
-      '@type': 'Offer',
-      price: producto.precio.toFixed(0),
-      priceCurrency: 'COP',
-      availability: producto.disponible
-        ? 'https://schema.org/InStock'
-        : 'https://schema.org/OutOfStock',
-      url: `${SITE_URL}/producto/${producto.id}`,
-      seller: { '@type': 'Organization', name: BRAND_NAME },
-    },
+    // Un producto sin precio publicado no tiene oferta: emitir "0" sería un
+    // dato estructurado inválido (el precio vive en WhatsApp como consulta).
+    offers:
+      producto.precio > 0
+        ? {
+            '@type': 'Offer',
+            price: producto.precio.toFixed(0),
+            priceCurrency: 'COP',
+            availability: producto.disponible
+              ? 'https://schema.org/InStock'
+              : 'https://schema.org/OutOfStock',
+            url: `${SITE_URL}/producto/${producto.id}`,
+            seller: { '@type': 'Organization', name: BRAND_NAME },
+          }
+        : undefined,
   }
 }
 

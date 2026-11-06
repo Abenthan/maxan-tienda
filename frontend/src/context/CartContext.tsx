@@ -14,6 +14,8 @@ interface CartContextType {
   add: (item: Omit<CartItem, 'cantidad'> & { cantidad?: number }) => void
   remove: (productoId: number) => void
   setCantidad: (productoId: number, cantidad: number) => void
+  /** Actualiza el precio unitario de un item (revalidación previa a cotizar). */
+  setPrecio: (productoId: number, precio: number) => void
   clear: () => void
   total: number
   count: number
@@ -65,6 +67,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
+  const setPrecio = useCallback((productoId: number, precio: number) => {
+    setItems((prev) =>
+      prev.map((it) => (it.productoId === productoId ? { ...it, precio } : it)),
+    )
+  }, [])
+
   const clear = useCallback(() => setItems([]), [])
 
   const { total, count } = useMemo(() => {
@@ -74,7 +82,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [items])
 
   return (
-    <CartContext.Provider value={{ items, add, remove, setCantidad, clear, total, count }}>
+    <CartContext.Provider value={{ items, add, remove, setCantidad, setPrecio, clear, total, count }}>
       {children}
     </CartContext.Provider>
   )

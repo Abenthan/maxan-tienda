@@ -4,7 +4,7 @@ import { Link, useParams } from 'react-router-dom'
 import { useCart } from '../context/CartContext'
 import { fetchProducto, type Producto } from '../lib/api'
 import { formatCOP } from '../lib/format'
-import { breadcrumbJsonLd, productJsonLd, useSeo } from '../lib/seo'
+import { breadcrumbJsonLd, productJsonLd, setOgImageSize, useSeo } from '../lib/seo'
 import {
   MAIL,
   WA_DISPLAY,
@@ -73,6 +73,7 @@ export default function ProductoDetalle() {
       productJsonLd({
         id: producto.id,
         nombre: producto.nombre,
+        codigo: producto.codigo,
         descripcion: producto.descripcion,
         imagenPrincipal: producto.imagenPrincipal,
         precio: producto.precio,
@@ -104,6 +105,8 @@ export default function ProductoDetalle() {
         : DESCRIPCION_GENERICA),
     path: noEncontrado ? '/404' : `/producto/${producto?.id ?? id}`,
     image: producto?.imagenPrincipal ?? undefined,
+    imageAlt: producto?.nombre ?? undefined,
+    ogType: 'product',
     jsonLd,
     noindex: sinCanonical,
     canonical: sinCanonical ? null : undefined,
@@ -236,6 +239,7 @@ export default function ProductoDetalle() {
                   alt={producto.nombre}
                   width={640}
                   height={480}
+                  onLoad={(e) => setOgImageSize(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight)}
                   className="h-full w-full object-contain p-4"
                 />
               ) : (

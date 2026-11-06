@@ -4,6 +4,7 @@ const cors = require("cors");
 const pool = require("./config/db");
 const catalogoRouter = require("./routes/catalogo");
 const pedidosRouter = require("./routes/pedidos");
+const sitemapRouter = require("./routes/sitemap");
 
 const app = express();
 app.set("trust proxy", true);
@@ -20,6 +21,7 @@ app.use(express.json());
 
 app.use("/api/catalogo", catalogoRouter);
 app.use("/api/pedidos", pedidosRouter);
+app.use(sitemapRouter);
 
 app.get("/health", async (req, res) => {
   try {

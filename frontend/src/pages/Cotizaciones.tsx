@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import axios from 'axios'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { cancelarPedido, fetchPedido, fetchPedidos, type Pedido } from '../lib/api'
 import { redirectToAuthLogin, type SsoUser } from '../lib/authSso'
@@ -26,6 +26,10 @@ interface ResultadoLista {
 
 export default function Cotizaciones() {
   const { user, loading: authLoading } = useAuth()
+  const [searchParams] = useSearchParams()
+  // Confirmación durable: al crear una cotización desde el carrito se llega a
+  // /cotizaciones?destacar=N y esa tarjeta se resalta y recibe el foco.
+  const destacar = Number(searchParams.get('destacar')) || null
   const [resultado, setResultado] = useState<ResultadoLista | null>(null)
   const [intento, setIntento] = useState(0)
   const [detalles, setDetalles] = useState<Record<number, CargaDetalle>>({})
@@ -76,6 +80,18 @@ export default function Cotizaciones() {
   const pedidos = datosActuales?.pedidos ?? []
   const errorLista = datosActuales?.error ?? null
   const loadingLista = !!user && datosActuales === null
+
+  // Resalta y enfoca la cotización que acaba de generarse en el carrito
+  // (/cotizaciones?destacar=N). Depende de `resultado` para no recrear arrays
+  // derivados en cada render.
+  useEffect(() => {
+    if (destacar === null || !resultado || resultado.usuario !== user) return
+    if (resultado.error || !resultado.pedidos.some((p) => p.id === destacar)) return
+    const elemento = document.getElementById(`cotizacion-${destacar}`)
+    if (!elemento) return
+    elemento.scrollIntoView({ block: 'center' })
+    elemento.focus({ preventScroll: true })
+  }, [destacar, resultado, user])
 
   function reintentarLista() {
     solicitudRef.current += 1
@@ -325,9 +341,22 @@ export default function Cotizaciones() {
             const estado = ESTADOS[p.estado]
             const abierto = detalleId === p.id
             const cargandoDetalle = abierto && (!detalles[p.id] || detalles[p.id].status === 'loading')
+            const destacada = p.id === destacar
 
             return (
-              <li key={p.id} className="card px-5 py-5">
+              <li
+                key={p.id}
+                id={`cotizacion-${p.id}`}
+                tabIndex={-1}
+                aria-label={`Cotización ${p.id}, estado ${estado.texto}${
+                  destacada ? ' (recién generada)' : ''
+                }`}
+                className={
+                  destacada
+                    ? 'card px-5 py-5 outline outline-2 outline-offset-2 outline-maxan-primary focus:outline-maxan-primary'
+                    : 'card px-5 py-5 focus:outline-none'
+                }
+              >
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
                     <div className="flex flex-wrap items-center gap-3">
@@ -338,6 +367,11 @@ export default function Cotizaciones() {
                       Creada el {formatFechaHora(p.createdAt)} · {p.items.length}{' '}
                       {p.items.length === 1 ? 'producto' : 'productos'}
                     </p>
+                    {destacada && (
+                      <p className="mt-2 text-sm font-semibold text-maxan-navy">
+                        Es la cotización que generaste desde el carrito.
+                      </p>
+                    )}
                     {p.observaciones && (
                       <p className="mt-2 text-sm text-maxan-text-secondary">
                         Observaciones: {p.observaciones}

@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Respaldo estatico del sitemap: nginx lo sirve con estado 200 solo si el
+  backend (que genera el sitemap dinamico con las URLs de producto) no
+  responde. El sitemap real se sirve desde GET /sitemap.xml del backend.
+-->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://tienda.maxansistemas.com/</loc>

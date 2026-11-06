@@ -61,6 +61,20 @@ async function existe(id) {
   return Boolean(rows[0]?.existe);
 }
 
+// Filas para el sitemap: id y última modificación real (fecha mayor entre el
+// producto del ERP y su registro de venta). Solo productos activos.
+async function listarParaSitemap() {
+  const { rows } = await pool.query(
+    `SELECT pv.producto_id AS id,
+            GREATEST(pv.updated_at, p.updated_at) AS lastmod
+       FROM tienda.productos_venta pv
+       JOIN inventario.productos p ON p.id = pv.producto_id
+      WHERE pv.activo = TRUE
+      ORDER BY pv.producto_id`
+  );
+  return rows;
+}
+
 async function obtenerImagenes(productoId) {
   const { rows } = await pool.query(
     `SELECT id, url, es_principal, orden
@@ -82,4 +96,4 @@ async function categorias() {
   return rows.map((r) => r.categoria);
 }
 
-module.exports = { listar, obtenerPorId, existe, obtenerImagenes, categorias };
+module.exports = { listar, obtenerPorId, existe, listarParaSitemap, obtenerImagenes, categorias };

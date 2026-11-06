@@ -12,6 +12,13 @@ export const WA_LINK = `https://wa.me/${WA_NUMBER}`
 export const MAIL = 'hola@maxansistemas.com'
 export const MAIL_LINK = `mailto:${MAIL}`
 
+/** Horario de atención comercial (hora Colombia). Visible en el carrito. */
+export const HORARIO =
+  'Lunes a viernes 8:00 a. m. – 6:00 p. m. y sábados 9:00 a. m. – 1:00 p. m. (hora Colombia)'
+
+/** Expectativa de respuesta del asesor detrás del botón de cotizar. */
+export const TIEMPO_RESPUESTA = 'Respondemos usualmente el mismo día hábil'
+
 /** Enlace de WhatsApp con mensaje precargado. */
 export function waLink(mensaje = ''): string {
   return mensaje ? `${WA_LINK}?text=${encodeURIComponent(mensaje)}` : WA_LINK
