@@ -59,6 +59,8 @@ async function crear({ usuarioId, observaciones, items }) {
 }
 
 // Lista las cotizaciones de un usuario, para la vista "mis cotizaciones".
+// Incluye los items de cada cotización en una sola consulta adicional para que
+// la lista muestre el conteo real sin caer en N+1.
 async function listarPorUsuario(usuarioId) {
   const { rows } = await pool.query(
     `${SELECT_COTIZACION}
@@ -66,7 +68,27 @@ async function listarPorUsuario(usuarioId) {
      ORDER BY c.created_at DESC`,
     [usuarioId]
   );
-  return rows;
+  if (rows.length === 0) return [];
+
+  const { rows: items } = await pool.query(
+    `SELECT cotizacion_id, id, producto_id, codigo, nombre, unidad_medida, cantidad, precio, subtotal
+     FROM tienda.cotizaciones_items
+     WHERE cotizacion_id = ANY($1::int[])
+     ORDER BY cotizacion_id, id`,
+    [rows.map((r) => Number(r.id))]
+  );
+
+  const itemsPorCotizacion = new Map();
+  for (const item of items) {
+    const clave = Number(item.cotizacion_id);
+    if (!itemsPorCotizacion.has(clave)) itemsPorCotizacion.set(clave, []);
+    itemsPorCotizacion.get(clave).push(item);
+  }
+
+  return rows.map((row) => ({
+    ...row,
+    items: itemsPorCotizacion.get(Number(row.id)) || [],
+  }));
 }
 
 async function obtenerPorId(id) {

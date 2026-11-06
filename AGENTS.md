@@ -14,7 +14,7 @@ Actualizar **AGENTS.md** y **README.md** conforme avanza el desarrollo.
   - `src/controllers/catalogoController.js` — valida `id` numérico, 404 en detalle inexistente.
   - `src/routes/catalogo.js` — endpoints públicos `GET /productos`, `GET /productos/:id`, `GET /categorias`.
   - **Pedidos/cotizaciones implementados (Fase 4)** con capas `routes → controllers → services → repositories`, protegidos con `authenticate` + `authorizeRol("Cliente Tienda")`:
-    - `src/repositories/pedidosRepository.js` — `crear()` (transacción: cabecera + items), `listarPorUsuario`, `obtenerPorId`, `listarItems`, `cancelar()` (solo `pendiente`). Incluye `total` por `SUM(subtotal)`.
+    - `src/repositories/pedidosRepository.js` — `crear()` (transacción: cabecera + items), `listarPorUsuario` (cabecera + `items` en una segunda consulta agrupada, sin N+1), `obtenerPorId`, `listarItems`, `cancelar()` (solo `pendiente`). Incluye `total` por `SUM(subtotal)`.
     - `src/services/pedidosService.js` — valida cada item contra el catálogo (existe, activo y disponible; el precio/nombre se recomponen desde la BD, nunca del cliente), calcula subtotales y shape `toCotizacion`.
     - `src/controllers/pedidosController.js` — 400 en id inválido, 404 si no existe o es de otro usuario, 409 al cancelar una no-pendiente.
     - `src/routes/pedidos.js` — protege toda la ruta con `router.use(authenticate, authorizeRol("Cliente Tienda"))`; `GET /`, `POST /`, `GET /:id`, `POST /:id/cancelar`.
@@ -33,7 +33,7 @@ Actualizar **AGENTS.md** y **README.md** conforme avanza el desarrollo.
   - **Carrito/checkout (Fase 4)**: `src/pages/Carrito.tsx` — ruta `/carrito`; edita cantidades, observaciones opcionales, genera la cotización con `POST /api/pedidos` (exige sesión; si no hay, botón redirige al login SSO) y muestra confirmación al crearla.
   - `src/pages/Catalogo.tsx` — hero + filtro por categoría (`aria-pressed`), grid de `ProductCard`, estados de carga/error, JSON-LD `ItemList`.
   - `src/pages/ProductoDetalle.tsx` — ruta `/producto/:id` con galería, migas de pan, cantidad, disponibilidad y **botón "Agregar al carrito"**; JSON-LD `Product` + `BreadcrumbList`.
-  - `src/pages/Cotizaciones.tsx` — ruta `/cotizaciones`: mis cotizaciones (estado, fecha, total), detalle expandible y cancelación de las pendientes. Usa `fetchPedidos`/`fetchPedido`/`cancelarPedido` (ya existentes en `lib/api.ts`). `noindex`.
+  - `src/pages/Cotizaciones.tsx` — ruta `/cotizaciones`: mis cotizaciones (estado, fecha, total y conteo real de items), detalle expandible con máquina de estados por id (`loading`/`success`/`error` + reintento, ignorando respuestas obsoletas), confirmación inline antes de cancelar y badge `Cancelada`. Separa carga, error y vacío, y bloquea la vista hasta resolver `authLoading`. `noindex`.
   - `src/pages/NoEncontrada.tsx` — 404 real (`noindex`) en vez del redirect a `/`.
   - `src/App.tsx` — rutas `/`, `/producto/:id`, `/carrito`, `/cotizaciones`, `*` → 404. `ProductoRoute` remonta el detalle por `key={id}` (estado limpio al cambiar de producto).
   - `src/index.css` — **sistema de tokens del ecosistema** (`@theme` de Tailwind 4): `--color-maxan-*`, `--radius-maxan-*`, `--shadow-maxan-*` (mismos nombres y valores que `maxanSistemas.com`) + capa de componentes (`.skip-link`, `.btn*`, `.field-*`, `.card`, `.eyebrow`, `.section-title`, `.prose-body`, `.badge-*`). Sin colores literales en los componentes. Los bordes de controles (`.field-input`, `.btn-secondary`, `.btn-ghost`) usan `--color-maxan-border-control` (≥3:1); `border`/`border-strong` quedan para decoración.
@@ -290,3 +290,26 @@ npm run preview  # http://localhost:4173
 npx lighthouse http://localhost:4173/ --only-categories=accessibility,seo \
   --chrome-flags="--headless=new --no-sandbox"
 ```
+
+## WP-11 — Lista y detalle de cotizaciones (2026-11-06)
+
+- **Backend**: `GET /api/pedidos` devuelve los `items` reales de cada cotización.
+  `listarPorUsuario()` carga las cabeceras y, si hay resultados, todos los items en
+  una segunda consulta (`WHERE cotizacion_id = ANY($1::int[])`) y los agrupa en
+  memoria; `pedidosService.listar()` los mapea con `toCotizacion(r, r.items)`.
+  Contrato aditivo: no cambian `GET /api/pedidos/:id`, la cancelación ni el frontend
+  tipado.
+- **Frontend**: `Cotizaciones.tsx` usa un estado por id
+  (`loading | success | error`) y un contador de solicitud para ignorar respuestas
+  obsoletas al cambiar de detalle. Cada error ofrece **Reintentar**. La lista
+  distingue `authLoading`, sesión ausente, carga, error (con reintento) y vacío,
+  de modo que error y vacío nunca se muestran a la vez. El conteo de productos ya
+  es real.
+- **Cancelación**: confirmación inline (`role="group"`), foco en “Sí, cancelar”,
+  retorno de foco a “Cancelar” al volver, botón deshabilitado mientras cancela y
+  aviso `role="status"`. La respuesta del backend actualiza lista y detalle; un
+  `409` muestra el mensaje y refresca la lista con el estado real.
+- **Verificación**: `node --check` OK, `npm run build` OK (`tsc -b && vite build`),
+  `npm run lint` 0/0; 24 comprobaciones con Chrome headless/CDP (gate de sesión,
+  conteo real, carrera de detalles, confirmación, error/vacío, reintentos y 409);
+  Lighthouse a11y **100** en `/cotizaciones` (SEO 69 esperado por `noindex`).

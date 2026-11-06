@@ -92,7 +92,7 @@ async function crear(usuarioId, { observaciones, items }) {
 
 async function listar(usuarioId) {
   const rows = await pedidosRepository.listarPorUsuario(usuarioId);
-  return rows.map((r) => toCotizacion(r, []));
+  return rows.map((r) => toCotizacion(r, r.items));
 }
 
 async function obtenerPorId(id, usuarioId) {

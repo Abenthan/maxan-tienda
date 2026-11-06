@@ -99,7 +99,7 @@ corporativa: mismos nombres de token, mismos componentes base y mismos patrones.
 | `/` | `Catalogo.tsx` | hero + filtro por categoría + grid de `ProductCard` + JSON-LD `ItemList` |
 | `/producto/:id` | `ProductoDetalle.tsx` | galería, migas de pan, cantidad, JSON-LD `Product` + `BreadcrumbList` |
 | `/carrito` | `Carrito.tsx` | cantidades, observaciones, generar cotización (`noindex`) |
-| `/cotizaciones` | `Cotizaciones.tsx` | mis cotizaciones: estado, detalle y cancelación (`noindex`) |
+| `/cotizaciones` | `Cotizaciones.tsx` | mis cotizaciones: estado, conteo real, detalle con reintento y cancelación confirmada (`noindex`) |
 | `*` | `NoEncontrada.tsx` | 404 real (`noindex`) |
 
 ## Endpoints API
@@ -110,7 +110,7 @@ corporativa: mismos nombres de token, mismos componentes base y mismos patrones.
 | `GET` | `/api/catalogo/productos` | Público | Productos en venta + stock informativo |
 | `GET` | `/api/catalogo/productos/:id` | Público | Detalle producto |
 | `GET` | `/api/catalogo/categorias` | Público | Categorías del catálogo |
-| `GET` | `/api/pedidos` | JWT Cliente Tienda | Mis cotizaciones |
+| `GET` | `/api/pedidos` | JWT Cliente Tienda | Mis cotizaciones con `items` reales |
 | `POST` | `/api/pedidos` | JWT Cliente Tienda | Crear cotización desde el carrito (estado `pendiente`) |
 | `GET` | `/api/pedidos/:id` | JWT Cliente Tienda | Detalle cotización con items |
 | `POST` | `/api/pedidos/:id/cancelar` | JWT Cliente Tienda | Cancelar cotización pendiente (409 si no) |
@@ -147,12 +147,16 @@ El ERP referencia: `inventario.productos` (`id, codigo, nombre, categoria, inven
    `Layout`/`Header`/`Footer`/`ProductCard` nuevos, página `/cotizaciones`, 404 real, SEO por
    ruta, `robots.txt`/`sitemap.xml`/`site.webmanifest`, logo y favicons oficiales, nginx con
    gzip y caché correctos. *✅ completada (2026-10-21)*
+8. **WP-11 — lista y detalle de cotizaciones** — `GET /api/pedidos` devuelve los items reales,
+   el detalle usa un estado por id con reintento y respuestas obsoletas ignoradas, la cancelación
+   exige confirmación inline y la vista separa sesión/carga/error/vacío. *✅ completada (2026-11-06)*
 
 ## Pendientes
 - **Fase 5** — webhook a n8n (`N8N_WEBHOOK_URL`) al crear cotización. Las notificaciones
   automáticas (WhatsApp/Telegram) pertenecen al CRM futuro, no a la tienda: el footer de la
   tienda indica que un asesor confirma la cotización.
 - **Validar en navegador** el flujo completo con cliente autenticado: agregar al carrito →
-  checkout → confirmación → `/cotizaciones` (listado, detalle y cancelación).
+  checkout → confirmación → `/cotizaciones`. El listado, detalle y cancelación ya se
+  verificaron con Chrome headless/CDP (WP-11); queda el alta desde el carrito.
 - **Lighthouse** en las 5 rutas tras el deploy de la normalización.
 - Schema `tienda`: ya aplicado a `maxan_db_dev` (con 14 `productos_venta` de prueba). En producción (`maxan_db`) aplicarlo junto al init de `maxan-db`.
