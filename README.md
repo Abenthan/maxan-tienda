@@ -5,8 +5,8 @@ Tienda online del ecosistema **Maxan Sistemas** en **tienda.maxansistemas.com** 
 ## Estado actual
 **Fases 1 a la 4 — esqueleto + catálogo + login/registro SSO + carrito/cotizaciones implementados.**
 
-- `backend/` — Express 5 + `pg` + `jsonwebtoken` + `cors`. `src/index.js` (servidor, `GET /health` con BD, `app.locals.pool`, `trust proxy`), `src/config/{db,auth}.js`, `src/middleware/auth.js` (`authenticate`/`authorizeRol`, idénticos al ERP). **Catálogo implementado** con capas `routes → controllers → services → repositories` (`catalogoRepository`, `catalogoService`, `catalogoController`, `routes/catalogo`). **Pedidos/cotizaciones implementados** (Fase 4) con el mismo patrón + `authenticate` + `authorizeRol("Cliente Tienda")` (`pedidosRepository` con transacción, `pedidosService` validando items contra el catálogo, `routes/pedidos`). Puerto interno **3007**.
-- `frontend/` — React 19 + Vite 8 + TS 6 + Tailwind CSS 4 + react-router-dom v7. **Catálogo + SSO + carrito/checkout + página de cotizaciones**, normalizado según `../diseño.md` (tokens `--maxan-*`, accesibilidad WCAG 2.2 AA, SEO técnico). Archivos clave: `lib/api.ts` (axios con interceptor JWT/401), `lib/authSso.ts` + `context/AuthContext.tsx` (SSO del ERP), `context/CartContext.tsx` (carrito localStorage), `lib/seo.ts` (`useSeo` + JSON-LD), `lib/wa.ts` (WhatsApp/email: fuente única compartida con la web), `lib/format.ts` (formato es-CO), `components/{Layout,Header,Footer,ProductCard,ScrollToTop}.tsx`, páginas `pages/{Catalogo,ProductoDetalle,Carrito,Cotizaciones,NoEncontrada}.tsx`. Dev en **5178**, proxy `/auth-sso` → backend auth.
+- `backend/` — Express 5 + `pg` + `jsonwebtoken` + `cors`. `src/index.js` (servidor, `GET /health` con BD, `app.locals.pool`, `trust proxy`), `src/config/{db,auth}.js`, `src/middleware/auth.js` (`authenticate`/`authorizeRol`, idénticos al ERP). **Catálogo implementado** con capas `routes → controllers → services → repositories` (`catalogoRepository`, `catalogoService`, `catalogoController`, `routes/catalogo`). **Pedidos/cotizaciones implementados** (Fase 4) con el mismo patrón + `authenticate` + `authorizeRol("Cliente Tienda")` (`pedidosRepository` con transacción, `pedidosService` validando items contra el catálogo, `routes/pedidos`). **Sitemap dinámico** (`routes/sitemap.js` + `sitemapService`, caché 5 min). Puerto interno **3007**.
+- `frontend/` — React 19 + Vite 8 + TS 6 + Tailwind CSS 4 + react-router-dom v7. **Catálogo (con búsqueda/filtros/orden en la URL) + SSO + carrito/checkout (con contacto y revalidación previa a cotizar) + página de cotizaciones (con resaltado `?destacar=`)**, normalizado según `../diseño.md` (tokens `--maxan-*`, accesibilidad WCAG 2.2 AA, SEO técnico). Archivos clave: `lib/api.ts` (axios con interceptor JWT/401), `lib/authSso.ts` + `context/AuthContext.tsx` (SSO del ERP), `context/CartContext.tsx` (carrito localStorage + `setPrecio` para la revalidación), `lib/seo.ts` (`useSeo` + JSON-LD de producto con `sku` real y sin `offers` sin precio), `lib/wa.ts` (WhatsApp/email/horario: fuente única compartida con la web), `lib/format.ts` (formato es-CO), `components/{Layout,Header,Footer,ProductCard,ScrollToTop}.tsx`, páginas `pages/{Catalogo,ProductoDetalle,Carrito,Cotizaciones,NoEncontrada}.tsx`. Dev en **5178**, proxy `/auth-sso` → backend auth.
 - Schema `tienda` — centralizado en el repo `maxan-db` (`../maxan-db/init/09_tienda.sql`); **aplicado a `maxan_db_dev`** con 14 `productos_venta` de prueba. Ya no hay `db/` en este repo.
 - `docker-compose.{dev,prod}.yml`, `deploy.sh`, `.env.{example,dev,prod}` — patrón endurecido de maxan-auth.
 
@@ -78,16 +78,27 @@ corporativa: mismos nombres de token, mismos componentes base y mismos patrones.
 - El estado nunca depende solo del color: los badges llevan el texto del estado.
 
 ### SEO
-- `src/lib/seo.ts` — `useSeo({ title, description, path, image, jsonLd, noindex })` por ruta
+- `src/lib/seo.ts` — `useSeo({ title, description, path, image, jsonLd, noindex, canonical, ogType, imageAlt, imageWidth, imageHeight })` por ruta
   (title, description, canonical, Open Graph, Twitter Card y JSON-LD) + helpers
-  `breadcrumbJsonLd`, `productJsonLd`, `itemListJsonLd`. Mismo contrato que
-  `maxanSistemas.com/src/lib/seo.js`.
+  `breadcrumbJsonLd`, `productJsonLd`, `itemListJsonLd` y `setOgImageSize` (completa
+  `og:image:width/height` con `naturalWidth/Height` al cargar la imagen del producto).
+  Mismo contrato que `maxanSistemas.com/src/lib/seo.js`.
+- JSON-LD de producto: `sku` es el **código real del ERP** (`producto.codigo`, con
+  `productID: sku:<código>`); si `precio <= 0` no se emite `offers` (nunca un
+  `price: "0"` inválido). `og:type=product` y `og:image:alt` con el nombre en la ficha.
 - `index.html` — `lang="es-CO"`, canonical, OG/Twitter, `theme-color`, manifest, favicons y
   JSON-LD estático de `Organization` + `WebSite`.
-- `public/robots.txt`, `public/sitemap.xml` y `public/site.webmanifest` estáticos.
+- **Sitemap dinámico**: lo genera el backend (`GET /sitemap.xml`, con `sitemapService`,
+  caché en memoria 5 min, `lastmod` real de la BD); nginx hace proxy de
+  `https://tienda.maxansistemas.com/sitemap.xml` al backend y si este no responde sirve
+  el estático de respaldo `public/sitemap-fallback.xml` (solo la raíz, estado 200).
+- `public/robots.txt`, `public/sitemap-fallback.xml` y `public/site.webmanifest` estáticos.
 - Páginas privadas (`/carrito`, `/cotizaciones`, 404) con `noindex` y fuera del sitemap.
+- Canonical del catálogo fijo a la raíz: las combinaciones `?q=&cat=&orden=` no generan
+  URLs canónicas propias.
 - `VITE_SITE_URL` (opcional) define el origen público para canonical/OG; por defecto
-  `https://tienda.maxansistemas.com`.
+  `https://tienda.maxansistemas.com`. En producción el backend usa `PUBLIC_URL` para las
+  `<loc>` del sitemap.
 - Imagen social: `public/images/og-tienda.jpg` (1200 × 630, JPG, 107 KB), tarjeta propia de
   la tienda. Prompts y notas de producción en `../imagenes/imagenes-tienda.md`. Al reemplazarla,
   subir `OG_IMAGE_VERSION` en `src/lib/seo.ts` y el `?v=` de `index.html` para invalidar la caché
@@ -96,10 +107,10 @@ corporativa: mismos nombres de token, mismos componentes base y mismos patrones.
 ## Rutas del frontend
 | Ruta | Página | Notas |
 |---|---|---|
-| `/` | `Catalogo.tsx` | hero + filtro por categoría + grid de `ProductCard` + JSON-LD `ItemList` |
-| `/producto/:id` | `ProductoDetalle.tsx` | galería, migas de pan, cantidad, JSON-LD `Product` + `BreadcrumbList`; CTA de consulta por WhatsApp/correo si no hay precio o stock; estado propio "no encontrado" (`noindex`, sin canonical) |
-| `/carrito` | `Carrito.tsx` | cantidades, observaciones, generar cotización (`noindex`) |
-| `/cotizaciones` | `Cotizaciones.tsx` | mis cotizaciones: estado, conteo real, detalle con reintento y cancelación confirmada (`noindex`) |
+| `/` | `Catalogo.tsx` | hero + búsqueda por nombre/código y filtro por categoría + orden en la URL (`?q=&cat=&orden=`, compartible y restaurable con back/forward) + grid de `ProductCard` + JSON-LD `ItemList` que refleja el filtro; canonical fijo a la raíz |
+| `/producto/:id` | `ProductoDetalle.tsx` | galería, migas de pan, cantidad, JSON-LD `Product` (sku real del ERP, sin `offers` si no hay precio) + `BreadcrumbList`; OG `type=product`, `image:alt` y dimensiones reales; CTA de consulta por WhatsApp/correo si no hay precio o stock; estado propio "no encontrado" (`noindex`, sin canonical) |
+| `/carrito` | `Carrito.tsx` | cantidades, observaciones, contacto y horario visibles, alcance de entrega/facturación/garantía, "total estimado" con aviso de revalidación; **revalida precio/stock contra el catálogo antes de cotizar** y si cambió muestra alerta con "Actualizar carrito" (`noindex`) |
+| `/cotizaciones` | `Cotizaciones.tsx` | mis cotizaciones: estado, conteo real, detalle con reintento y cancelación confirmada; `?destacar=N` resalta la cotización recién generada (contorno, aria-label, nota, foco y scroll) (`noindex`) |
 | `*` | `NoEncontrada.tsx` | 404 real (`noindex`, sin canonical) |
 
 ## Endpoints API
@@ -115,6 +126,7 @@ corporativa: mismos nombres de token, mismos componentes base y mismos patrones.
 | `POST` | `/api/pedidos` | JWT Cliente Tienda | Crear cotización desde el carrito (estado `pendiente`) |
 | `GET` | `/api/pedidos/:id` | JWT Cliente Tienda | Detalle cotización con items |
 | `POST` | `/api/pedidos/:id/cancelar` | JWT Cliente Tienda | Cancelar cotización pendiente (409 si no) |
+| `GET` | `/sitemap.xml` | Público | Sitemap XML dinámico: raíz + ficha de cada producto activo, `lastmod` real de la BD, caché en memoria 5 min; nginx hace proxy y con backend caído devuelve el estático de respaldo |
 
 > **Catálogo y pedidos implementados**. El catálogo vive en `routes/catalogo.js` (consume `catalogoService`); los pedidos en `routes/pedidos.js` (protegidos con `authenticate` + `authorizeRol("Cliente Tienda")`, consumen `pedidosService`). El webhook a n8n se implementa en Fase 5.
 
@@ -122,8 +134,11 @@ corporativa: mismos nombres de token, mismos componentes base y mismos patrones.
 agregar al carrito. Su CTA abre WhatsApp con un mensaje que incluye nombre, código de referencia
 y URL de la ficha; hay alternativa por correo. El número y el email viven solo en
 `frontend/src/lib/wa.ts` y son los mismos de `maxanSistemas.com/frontend/src/lib/wa.js`
-(`+57 313 485 0115`, `hola@maxansistemas.com`). El 404 de `/producto/:id` se apoya en
-`GET /api/catalogo/productos/:id/existe` (WP-12); el sitemap con URLs de producto es WP-24.
+(`+57 313 485 0115`, `hola@maxansistemas.com`); ahí también viven las constantes de horario y
+tiempo de respuesta visibles en el carrito (`HORARIO`: L-V 8:00 a. m. – 6:00 p. m. y sábados
+9:00 a. m. – 1:00 p. m., hora Colombia; `TIEMPO_RESPUESTA`: respuesta usualmente el mismo día
+hábil). El 404 de `/producto/:id` se apoya en `GET /api/catalogo/productos/:id/existe` (WP-12);
+el sitemap con URLs de producto es `GET /sitemap.xml` (WP-24).
 
 ## Modelo de datos (schema `tienda`)
 - `productos_venta` — precio y visibilidad por `producto_id` (FK a `inventario.productos`).
@@ -140,7 +155,7 @@ El ERP referencia: `inventario.productos` (`id, codigo, nombre, categoria, inven
 
 ## Infra
 - Compose prod: `tienda-backend` (expose 3007) + `tienda-frontend` (`127.0.0.1:8082:80`, nginx proxy `/api/` y `/health` → `tienda-backend:3007`). Red `maxan_shared` externa.
-- `frontend/nginx.conf` es una **configuración completa** (no un bloque `server`): `events` + `http` con gzip, cabeceras de seguridad (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`), `resolver 127.0.0.11` (DNS de Docker para el `auth_request`), proxy `/api/` y `/health`, SPA fallback (`try_files … /index.html`), `index.html` sin caché, `/assets/` con caché 1 año (llevan hash), imágenes/fuentes 30 días y `robots.txt` / `sitemap.xml` / `site.webmanifest` siempre frescos. **404 real de producto**: `/producto/<id numérico>` hace una subpetición `auth_request` a `GET /api/catalogo/productos/:id/existe` y, si responde 403, sirve `index.html` con estado **404**; los ids malformados (`/producto/abc`, `/producto/1/x`, `/producto`) también devuelven 404 con el body de la SPA. Si el backend falla, se sirve la SPA con 200 y el cliente muestra su propio error. El `Dockerfile` la copia a `/etc/nginx/nginx.conf` (no a `conf.d/default.conf`) y su healthcheck usa `http://127.0.0.1:80/` para no depender de la resolución IPv6 de `localhost`.
+- `frontend/nginx.conf` es una **configuración completa** (no un bloque `server`): `events` + `http` con gzip, cabeceras de seguridad (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`), `resolver 127.0.0.11` (DNS de Docker para el `auth_request`), proxy `/api/` y `/health`, SPA fallback (`try_files … /index.html`), `index.html` sin caché, `/assets/` con caché 1 año (llevan hash), imágenes/fuentes 30 días y `robots.txt` / `sitemap.xml` / `site.webmanifest` siempre frescos. **404 real de producto**: `/producto/<id numérico>` hace una subpetición `auth_request` a `GET /api/catalogo/productos/:id/existe` y, si responde 403, sirve `index.html` con estado **404**; los ids malformados (`/producto/abc`, `/producto/1/x`, `/producto`) también devuelven 404 con el body de la SPA. **Sitemap dinámico**: `location = /sitemap.xml` hace `proxy_pass` a `tienda-backend:3007/sitemap.xml` y con `error_page 500 502 503 504 =200 /sitemap-fallback.xml` sirve el estático de respaldo si el backend no responde. Si el backend falla en el resto, se sirve la SPA con 200 y el cliente muestra su propio error. El `Dockerfile` la copia a `/etc/nginx/nginx.conf` (no a `conf.d/default.conf`) y su healthcheck usa `http://127.0.0.1:80/` para no depender de la resolución IPv6 de `localhost`.
 - `deploy.sh` (igual que auth): valida compose, backup BD (`pg_dump` de `maxan_db`), `git pull --ff-only`, `up --build`, health check `/health` vía 8082, rollback sugerido. Lee `.env.prod` con `grep` (nunca `source`).
 - Contenedores: `maxan-tienda-backend[-dev]`, `maxan-tienda-frontend[-dev]`.
 
@@ -165,13 +180,25 @@ El ERP referencia: `inventario.productos` (`id, codigo, nombre, categoria, inven
    **404 real** en `/producto/:id` cuando el id no existe o está inactivo, gracias al nuevo
    endpoint `GET /api/catalogo/productos/:id/existe`. *✅ completada y desplegada en
    producción (2026-11-06, commit `c65f5c8`)*
+10. **WP-22/23/24 — búsqueda en URL, contacto y revalidación al cotizar, sitemap dinámico y
+   SEO de producto** — catálogo con búsqueda (nombre/código) y orden en `searchParams`
+   (compartible y restaurable); carrito con contacto/horario, alcance de
+   entrega/facturación/garantía, total estimado y **revalidación contra el catálogo antes
+   de cotizar** (alerta de cambios + "Actualizar carrito"); confirmación durable con
+   `?destacar=N` en `/cotizaciones`; sitemap dinámico `GET /sitemap.xml` en el backend con
+   proxy nginx y fallback estático; JSON-LD de producto con `sku` del ERP, sin `offers` si
+   no hay precio, y OG `type=product` con alt y dimensiones reales. *✅ completada y
+   desplegada en producción (2026-11-06, commit `021fc28`)*
 
 ## Pendientes
 - **Fase 5** — webhook a n8n (`N8N_WEBHOOK_URL`) al crear cotización. Las notificaciones
   automáticas (WhatsApp/Telegram) pertenecen al CRM futuro, no a la tienda: el footer de la
   tienda indica que un asesor confirma la cotización.
-- **Validar en navegador** el flujo completo con cliente autenticado: agregar al carrito →
-  checkout → confirmación → `/cotizaciones`. El listado, detalle y cancelación ya se
-  verificaron con Chrome headless/CDP (WP-11); queda el alta desde el carrito.
-- **Lighthouse** en las 5 rutas tras el deploy de la normalización.
+- **Cargar precios reales** en `tienda.productos_venta` de producción: al 2026-11-06 ningún
+  producto activo tiene `precio > 0` (todas las fichas muestran "Precio a consultar" y el
+  JSON-LD no emite `offers`); con precios, el carrito permite cotizar con total estimado y
+  las fichas emiten `Offer` (verificado en dev con el producto 27).
+- **Validación manual en navegador** del flujo completo con cliente autenticado: agregar al
+  carrito → checkout → confirmación → `/cotizaciones` destacada. El alta, la revalidación y
+  el resaltado ya se verificaron con Chrome headless/CDP (WP-23); queda la prueba manual.
 - Schema `tienda`: ya aplicado a `maxan_db_dev` (con 14 `productos_venta` de prueba). En producción (`maxan_db`) aplicarlo junto al init de `maxan-db`.

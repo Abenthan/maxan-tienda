@@ -39,7 +39,7 @@ Actualizar **AGENTS.md** y **README.md** conforme avanza el desarrollo.
   - `src/App.tsx` — rutas `/`, `/producto/:id`, `/carrito`, `/cotizaciones`, `*` → 404. `ProductoRoute` remonta el detalle por `key={id}` (estado limpio al cambiar de producto).
   - `src/index.css` — **sistema de tokens del ecosistema** (`@theme` de Tailwind 4): `--color-maxan-*`, `--radius-maxan-*`, `--shadow-maxan-*` (mismos nombres y valores que `maxanSistemas.com`) + capa de componentes (`.skip-link`, `.btn*`, `.field-*`, `.card`, `.eyebrow`, `.section-title`, `.prose-body`, `.badge-*`). Sin colores literales en los componentes. Los bordes de controles (`.field-input`, `.btn-secondary`, `.btn-ghost`) usan `--color-maxan-border-control` (≥3:1); `border`/`border-strong` quedan para decoración.
   - `index.html` — `lang="es-CO"`, canonical, OG/Twitter, `theme-color`, manifest, favicons oficiales y JSON-LD estático (`Organization` + `WebSite`).
-  - `public/` — `images/logo.svg`, `images/logo-maxan-blanco.svg`, `images/og-tienda.jpg` (1200 × 630), `Logo-FAVICON.svg`, favicons PNG/ICO, `apple-touch-icon.png`, `icon-192/512.png`, `site.webmanifest`, `robots.txt`, `sitemap.xml`.
+  - `public/` — `images/logo.svg`, `images/logo-maxan-blanco.svg`, `images/og-tienda.jpg` (1200 × 630), `Logo-FAVICON.svg`, favicons PNG/ICO, `apple-touch-icon.png`, `icon-192/512.png`, `site.webmanifest`, `robots.txt`, `sitemap-fallback.xml`. **El `sitemap.xml` estático se eliminó** (WP-24): el sitemap real lo genera el backend (`GET /sitemap.xml`, `sitemapService` con caché 5 min y `lastmod` real de la BD, `PUBLIC_URL` para las `<loc>`) y nginx hace `proxy_pass` de `= /sitemap.xml` con `error_page 500 502 503 504 =200 /sitemap-fallback.xml`. Registrado en `backend/src/index.js`.
   - `nginx.conf` — **configuración completa** (`events` + `http`): gzip, cabeceras de seguridad, `resolver 127.0.0.11` (DNS de Docker, requerido por el `proxy_pass` con variable del `auth_request`), proxy `/api/` y `/health`, SPA fallback, `index.html` sin caché, `/assets/` 1 año (llevan hash), imágenes/fuentes 30 días. **404 real de producto**: `location ~ ^/producto/([0-9]+)/?$` hace `auth_request /_existe_producto` (subpetición a `GET /api/catalogo/productos/:id/existe`); 403 → `error_page 403 =404 /index.html` sirve la SPA con estado 404. Los ids malformados (`/producto/abc`, `/producto/1/x`, `/producto`) caen en un location propio que también devuelve 404 con el body de la SPA. Si el backend falla, `error_page 500 502 503 504 =200 /index.html` deja que el cliente muestre su error. El `Dockerfile` la copia a `/etc/nginx/nginx.conf`.
   - `frontend/.env.development` — `VITE_*` del dev: `VITE_AUTH_DELEGATED=true`, `VITE_AUTH_URL=http://localhost:5175`, `VITE_API_PROXY=http://localhost:3007`, `VITE_AUTH_SSO_PROXY=http://localhost:3006` (**ejecución sin Docker**: los proxies apuntan a `localhost`). En contenedor Docker dev usar `http://tienda-backend:3007` y `http://host.docker.internal:3006` (valores en `.env.dev`).
   - `vite.config.ts` — proxy `/api`→backend tienda y `/auth-sso`→backend auth (lee `VITE_API_PROXY` / `VITE_AUTH_SSO_PROXY`; en contenedor NO usar `127.0.0.1`).
@@ -82,6 +82,7 @@ Actualizar **AGENTS.md** y **README.md** conforme avanza el desarrollo.
 | `POST` | `/api/pedidos` | JWT Cliente Tienda | **Implementado** — crear cotización (estado `pendiente`) |
 | `GET` | `/api/pedidos/:id` | JWT Cliente Tienda | **Implementado** — detalle cotización con items |
 | `POST` | `/api/pedidos/:id/cancelar` | JWT Cliente Tienda | **Implementado** — cancelar solo si está `pendiente` (409 si no) |
+| `GET` | `/sitemap.xml` | Público | **Implementado** (WP-24) — sitemap XML dinámico: raíz + ficha de cada producto activo, `lastmod` real de la BD, caché en memoria 5 min; nginx hace proxy y con backend caído devuelve `public/sitemap-fallback.xml` con estado 200 |
 
 ## Variables de entorno
 - **Backend**: `PORT` (3007; host **8082**), `DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME` (dev `host.docker.internal:5433`; prod `maxan_db:5432`), `JWT_SECRET` (**idéntico a maxan-auth/ERP**, obligatorio en prod), `JWT_EXPIRES_IN`, `CORS_ORIGINS`, `PUBLIC_URL`, `N8N_WEBHOOK_URL`. `config/auth.js` lanza error si `NODE_ENV=production` sin `JWT_SECRET`.
@@ -363,3 +364,72 @@ Ejecutado con **autorización explícita** para tocar backend y nginx de tienda.
   válidas, **404 con body de la SPA** en ids inexistentes/malformados, 200/403
   en `/existe`, 401 sin token en `/api/pedidos`; 18 comprobaciones CDP por
   HTTPS, incluido el producto 4 (sin precio en producción) con su CTA real.
+
+## WP-22/23/24 — búsqueda en URL, contacto y revalidación al cotizar, sitemap dinámico y SEO de producto (2026-11-06)
+
+Ejecutado en una sesión con commit único `021fc28`. WP-24 tocó backend y
+nginx de tienda con **autorización explícita** (igual que WP-12).
+
+- **WP-22 (catálogo)**: `Catalogo.tsx` lee `q`, `cat` y `orden` de
+  `useSearchParams` (`/?q=&cat=&orden=`): búsqueda insensible a
+  tildes/mayúsculas por nombre y código, órdenes `relevancia | nombre |
+  precio-asc | precio-desc`, estado vacío con "Limpiar búsqueda y filtros" y
+  columna `role="status"` con el conteo. El estado sobrevive back/forward y
+  los enlaces son compartibles; una categoría inválida se lee como "todas"
+  sin tocar la URL. El canonical y `og:url` del catálogo quedan **fijos a la
+  raíz**: las combinaciones de filtro no son URLs canónicas. El JSON-LD
+  `ItemList` refleja los productos filtrados (`numberOfItems`).
+- **WP-23 (carrito y cotizaciones)**:
+  - Contacto en el aside del carrito desde `lib/wa.ts`, que ahora también
+    exporta `HORARIO` ("Lunes a viernes 8:00 a. m. – 6:00 p. m. y sábados
+    9:00 a. m. – 1:00 p. m. (hora Colombia)") y `TIEMPO_RESPUESTA`
+    ("Respondemos usualmente el mismo día hábil"), aprobados por el cliente.
+  - Sección "Qué pasa después de cotizar" con Entrega/Facturación/Garantía y
+    el aviso de que el carrito es un pedido **estimado** ("Total estimado").
+  - **Revalidación previa a cotizar**: `Promise.allSettled` de
+    `fetchProducto` por item; si cambió el precio o el producto ya no está
+    disponible/existe, alerta `role="alert"` con el detalle y botón
+    "Actualizar carrito" que aplica los cambios vía `setPrecio` (nuevo en
+    `CartContext`) o `remove`. Si la revalidación falla por red, no crea la
+    cotización y avisa. Solo crea cuando no hay cambios (el backend valida
+    igual: precio/nombre nunca del cliente).
+  - Confirmación durable: la confirmación menciona el id, y `Cotizaciones.tsx`
+    soporta `/cotizaciones?destacar=N` (contorno `outline-maxan-primary`,
+    `aria-label` "(recién generada)", nota de procedencia, foco y scroll a la
+    tarjeta).
+- **WP-24 (SEO/infraestructura)**:
+  - Sitemap dinámico en el backend: `routes/sitemap.js` +
+    `controllers/sitemapController.js` + `services/sitemapService.js`
+    (`catalogoRepository.listarParaSitemap()` con `lastmod` = fecha mayor
+    entre `tienda.productos_venta.updated_at` e
+    `inventario.productos.updated_at`, solo activos; caché en memoria 5 min;
+    `PUBLIC_URL` para las `<loc>`). nginx: `location = /sitemap.xml` hace
+    `proxy_pass` a `tienda-backend:3007` con `error_page 500 502 503 504
+    =200 /sitemap-fallback.xml` (estático, solo la raíz). El `sitemap.xml`
+    estático viejo se eliminó.
+  - `useSeo` acepta `ogType`, `imageAlt`, `imageWidth`, `imageHeight` y
+    exporta `setOgImageSize(w, h)`; `ProductoDetalle` usa `ogType: "product"`,
+    `imageAlt` = nombre y completa dimensiones reales en `onLoad`
+    (`naturalWidth/Height`). `productJsonLd` usa `sku` = código del ERP
+    (`productID: sku:<código>`) y **no emite `offers` si `precio <= 0`**
+    (adiós `price: "0"` inválido).
+- **Verificación**: `node --check` OK en backend; `npm run lint` 0/0 y
+  `npm run build` OK (JS 331,82 kB / gzip 105,45 kB). Chrome headless/CDP:
+  20 comprobaciones locales de catálogo (filtros en URL, back/forward,
+  enlaces compartibles, vacío y limpiar), 26 de carrito/cotizaciones
+  (contacto, alcance, revalidación con precios reales cambiados en
+  `maxan_db_dev` y resaltado `?destacar`), 15 de SEO (sku, Offer 3150000 COP,
+  og:type/alt/dimensiones 1000×1000, producto 12 sin precio → sin `offers`);
+  imagen de producción en Docker: `/sitemap.xml` 200 XML vía proxy y 200
+  estático con el backend caído, `auth_request` intacto; Lighthouse
+  a11y/SEO 100 en `/`, `/?q=kaspersky`, `/producto/27`, `/producto/12`
+  (a11y 100 en `/carrito`). En producción (commit `021fc28`, bundle
+  `index-DkeujkSA.js`, ambos contenedores `healthy`): `/sitemap.xml` 200 XML
+  con 23 productos activos sin `localhost`; rutas 200, `/producto/999999`
+  404, `/api/pedidos` 401 sin token; 15 comprobaciones CDP por HTTPS, con
+  **recorrido de las 23 fichas activas: ninguna emite `Offer` con
+  `price: "0"`**, todas con `sku` real y `og:image` correcta.
+- **Hallazgo de datos**: al 2026-11-06 **ningún producto activo en
+  producción tiene `precio > 0`** en `tienda.productos_venta` (solo los
+  productos 11 y 27 tienen foto). Con precios la ficha emite `Offer`
+  (verificado en dev, producto 27). Queda como dato comercial pendiente.
