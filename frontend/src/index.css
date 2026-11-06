@@ -32,6 +32,8 @@
   --color-maxan-text-muted: #64748b;
   --color-maxan-border: #e2e8f0;
   --color-maxan-border-strong: #cbd5e1;
+  /* Borde de controles: >=3:1 sobre surface y surface-secondary (WCAG 1.4.11) */
+  --color-maxan-border-control: #7c8ba1;
 
   /* Estados semánticos */
   --color-maxan-success: #15803d;
@@ -172,7 +174,7 @@
   .btn-secondary {
     background-color: var(--color-maxan-surface);
     color: var(--color-maxan-text);
-    border: 1px solid var(--color-maxan-border-strong);
+    border: 1px solid var(--color-maxan-border-control);
   }
 
   .btn-secondary:hover {
@@ -182,7 +184,7 @@
   .btn-ghost {
     background-color: transparent;
     color: var(--color-maxan-navy);
-    border: 1px solid var(--color-maxan-border-strong);
+    border: 1px solid var(--color-maxan-border-control);
   }
 
   .btn-ghost:hover {
@@ -227,7 +229,7 @@
     min-height: 44px;
     padding: 0.625rem 0.875rem;
     border-radius: var(--radius-maxan-md);
-    border: 1px solid var(--color-maxan-border-strong);
+    border: 1px solid var(--color-maxan-border-control);
     background-color: var(--color-maxan-surface);
     color: var(--color-maxan-text);
     font-size: 0.9375rem;
