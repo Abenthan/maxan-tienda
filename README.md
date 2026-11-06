@@ -149,7 +149,8 @@ El ERP referencia: `inventario.productos` (`id, codigo, nombre, categoria, inven
    gzip y caché correctos. *✅ completada (2026-10-21)*
 8. **WP-11 — lista y detalle de cotizaciones** — `GET /api/pedidos` devuelve los items reales,
    el detalle usa un estado por id con reintento y respuestas obsoletas ignoradas, la cancelación
-   exige confirmación inline y la vista separa sesión/carga/error/vacío. *✅ completada (2026-11-06)*
+   exige confirmación inline y la vista separa sesión/carga/error/vacío. *✅ completada y
+   desplegada en producción (2026-11-06, commit `af62487`)*
 
 ## Pendientes
 - **Fase 5** — webhook a n8n (`N8N_WEBHOOK_URL`) al crear cotización. Las notificaciones

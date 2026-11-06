@@ -313,3 +313,5 @@ npx lighthouse http://localhost:4173/ --only-categories=accessibility,seo \
   `npm run lint` 0/0; 24 comprobaciones con Chrome headless/CDP (gate de sesión,
   conteo real, carrera de detalles, confirmación, error/vacío, reintentos y 409);
   Lighthouse a11y **100** en `/cotizaciones` (SEO 69 esperado por `noindex`).
+  **Desplegado en producción el 2026-11-06** (commit `af62487`); `/cotizaciones`
+  responde 200 con el bundle nuevo y `/api/pedidos` sin token responde 401.
