@@ -309,6 +309,9 @@ npx lighthouse http://localhost:4173/ --only-categories=accessibility,seo \
   retorno de foco a “Cancelar” al volver, botón deshabilitado mientras cancela y
   aviso `role="status"`. La respuesta del backend actualiza lista y detalle; un
   `409` muestra el mensaje y refresca la lista con el estado real.
+- **Infra**: healthcheck del frontend corregido a `http://127.0.0.1:80/` (antes
+  `localhost` resolvía a IPv6 y el contenedor quedaba `unhealthy` aunque nginx
+  sirviera correctamente por IPv4).
 - **Verificación**: `node --check` OK, `npm run build` OK (`tsc -b && vite build`),
   `npm run lint` 0/0; 24 comprobaciones con Chrome headless/CDP (gate de sesión,
   conteo real, carrera de detalles, confirmación, error/vacío, reintentos y 409);

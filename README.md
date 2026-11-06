@@ -132,7 +132,7 @@ El ERP referencia: `inventario.productos` (`id, codigo, nombre, categoria, inven
 
 ## Infra
 - Compose prod: `tienda-backend` (expose 3007) + `tienda-frontend` (`127.0.0.1:8082:80`, nginx proxy `/api/` y `/health` → `tienda-backend:3007`). Red `maxan_shared` externa.
-- `frontend/nginx.conf` es una **configuración completa** (no un bloque `server`): `events` + `http` con gzip, cabeceras de seguridad (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`), proxy `/api/` y `/health`, SPA fallback (`try_files … /index.html`), `index.html` sin caché, `/assets/` con caché 1 año (llevan hash), imágenes/fuentes 30 días y `robots.txt` / `sitemap.xml` / `site.webmanifest` siempre frescos. El `Dockerfile` la copia a `/etc/nginx/nginx.conf` (no a `conf.d/default.conf`).
+- `frontend/nginx.conf` es una **configuración completa** (no un bloque `server`): `events` + `http` con gzip, cabeceras de seguridad (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`), proxy `/api/` y `/health`, SPA fallback (`try_files … /index.html`), `index.html` sin caché, `/assets/` con caché 1 año (llevan hash), imágenes/fuentes 30 días y `robots.txt` / `sitemap.xml` / `site.webmanifest` siempre frescos. El `Dockerfile` la copia a `/etc/nginx/nginx.conf` (no a `conf.d/default.conf`) y su healthcheck usa `http://127.0.0.1:80/` para no depender de la resolución IPv6 de `localhost`.
 - `deploy.sh` (igual que auth): valida compose, backup BD (`pg_dump` de `maxan_db`), `git pull --ff-only`, `up --build`, health check `/health` vía 8082, rollback sugerido. Lee `.env.prod` con `grep` (nunca `source`).
 - Contenedores: `maxan-tienda-backend[-dev]`, `maxan-tienda-frontend[-dev]`.
 
