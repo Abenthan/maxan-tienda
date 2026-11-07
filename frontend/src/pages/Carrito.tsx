@@ -43,7 +43,7 @@ export default function Carrito() {
 
   /**
    * Compara cada item con el estado real del catálogo antes de cotizar. El
-   * carrito vive en localStorage y puede estar desactualizado (precio, stock o
+   * carrito vive en localStorage y puede estar desactualizado (precio o
    * producto retirado); el backend también valida, pero así el usuario lo sabe
    * antes y no recibe un error que no entiende.
    */
@@ -338,7 +338,7 @@ export default function Carrito() {
               </div>
             </dl>
             <p className="field-hint mt-2">
-              Es un valor aproximado: precios y stock se revalidan con el catálogo antes de cotizar,
+              Es un valor aproximado: los precios se revalidan con el catálogo antes de cotizar,
               y el asesor confirma el precio final.
             </p>
 

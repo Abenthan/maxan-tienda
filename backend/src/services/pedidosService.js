@@ -2,9 +2,10 @@ const pedidosRepository = require("../repositories/pedidosRepository");
 const catalogoRepository = require("../repositories/catalogoRepository");
 
 // Valida y normaliza los items del carrito contra el catálogo: cada producto debe
-// existir, estar activo y disponible (precio > 0 y, si es inventariable, stock > 0).
-// El carrito manda solo { productoId, cantidad }; el precio y el nombre se
-// recomponen desde la BD (nunca se confía en lo que envía el cliente).
+// existir, estar activo y disponible (precio > 0; Maxan vende sin inventario
+// propio, el stock del ERP no participa). El carrito manda solo
+// { productoId, cantidad }; el precio y el nombre se recomponen desde la BD
+// (nunca se confía en lo que envía el cliente).
 async function validarItems(items) {
   if (!Array.isArray(items) || items.length === 0) {
     const err = new Error("El carrito está vacío");
@@ -39,7 +40,7 @@ async function validarItems(items) {
       err.status = 400;
       throw err;
     }
-    const disponible = Number(row.precio) > 0 && (!row.inventariable || Number(row.stock) > 0);
+    const disponible = Number(row.precio) > 0;
     if (!disponible) {
       const err = new Error(`"${row.nombre}" no está disponible`);
       err.status = 400;

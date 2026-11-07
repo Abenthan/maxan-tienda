@@ -35,6 +35,9 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
+    # Mismo .env.dev que el backend: dentro del contenedor los proxies de Vite
+    # deben apuntar a tienda-backend (DNS de Docker), nunca a localhost.
+    env_file: .env.dev
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:

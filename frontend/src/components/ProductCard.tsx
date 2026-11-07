@@ -10,7 +10,6 @@ export default function ProductCard({ producto }: { producto: Producto }) {
   const [agregado, setAgregado] = useState(false)
 
   const sinPrecio = producto.precio <= 0
-  const agotado = !producto.disponible
 
   useEffect(() => {
     if (!agregado) return
@@ -29,13 +28,14 @@ export default function ProductCard({ producto }: { producto: Producto }) {
     setAgregado(true)
   }
 
+  // Maxan vende sin inventario propio: la tarjeta solo distingue precio
+  // publicado (se agrega al carrito) de precio por consultar (WhatsApp).
+  // Nunca se muestra "Agotado": el stock del ERP no participa en la tienda.
   const badge = sinPrecio
     ? { texto: 'Consultar precio', clase: 'badge-info' }
-    : agotado
-      ? { texto: 'Agotado', clase: 'badge-neutral' }
-      : producto.destacado
-        ? { texto: 'Destacado', clase: 'badge-brand' }
-        : null
+    : producto.destacado
+      ? { texto: 'Destacado', clase: 'badge-brand' }
+      : null
 
   return (
     <article className="card flex h-full flex-col overflow-hidden">
@@ -99,10 +99,6 @@ export default function ProductCard({ producto }: { producto: Producto }) {
                 Ver ficha del producto
               </Link>
             </>
-          ) : agotado ? (
-            <button type="button" disabled className="btn btn-primary w-full px-3">
-              Sin stock
-            </button>
           ) : (
             <button type="button" onClick={agregar} className="btn btn-primary w-full px-3">
               {agregado ? 'Agregado' : 'Agregar al carrito'}

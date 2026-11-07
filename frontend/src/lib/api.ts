@@ -7,11 +7,9 @@ export interface Producto {
   nombre: string
   categoria: string | null
   unidadMedida: string | null
-  inventariable: boolean
   precio: number
   destacado: boolean
   descripcion: string | null
-  stock: number
   disponible: boolean
   imagenPrincipal: string | null
   imagenes?: { url: string; esPrincipal: boolean; orden: number }[]

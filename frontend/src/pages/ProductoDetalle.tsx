@@ -9,7 +9,6 @@ import {
   MAIL,
   WA_DISPLAY,
   mailLinkProducto,
-  mensajeConsultaDisponibilidad,
   mensajeConsultaPrecio,
   referenciaProducto,
   waLink,
@@ -77,9 +76,6 @@ export default function ProductoDetalle() {
         descripcion: producto.descripcion,
         imagenPrincipal: producto.imagenPrincipal,
         precio: producto.precio,
-        disponible: producto.disponible,
-        stock: producto.stock,
-        inventariable: producto.inventariable,
       }),
       breadcrumbJsonLd([
         { name: 'Catálogo', path: '/' },
@@ -132,19 +128,14 @@ export default function ProductoDetalle() {
 
   const sinPrecio = producto ? producto.precio <= 0 : false
 
+  // Maxan vende sin inventario propio: solo hay dos estados, precio publicado
+  // (disponible) o precio por consultar. Nunca se muestra "Agotado": el stock
+  // del ERP no participa en la tienda.
   const disponibilidad = !producto
     ? null
     : sinPrecio
       ? { texto: 'Consultar precio', clase: 'badge-info' }
-      : producto.disponible
-        ? {
-            texto: producto.inventariable ? `${producto.stock} en stock` : 'Disponible',
-            clase: 'badge-success',
-          }
-        : {
-            texto: producto.inventariable ? 'Agotado' : 'No disponible',
-            clase: 'badge-neutral',
-          }
+      : { texto: 'Disponible', clase: 'badge-success' }
 
   const consulta = producto
     ? {
@@ -154,11 +145,7 @@ export default function ProductoDetalle() {
       }
     : null
 
-  const mensaje = consulta
-    ? sinPrecio
-      ? mensajeConsultaPrecio(consulta)
-      : mensajeConsultaDisponibilidad(consulta)
-    : ''
+  const mensaje = consulta ? mensajeConsultaPrecio(consulta) : ''
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:py-10">
@@ -333,7 +320,7 @@ export default function ProductoDetalle() {
             )}
 
             <div className="mt-10 border-t border-maxan-border pt-8">
-              {producto.disponible && !sinPrecio ? (
+              {!sinPrecio ? (
                 <>
                   <div className="flex flex-wrap items-end gap-4">
                     <div>
@@ -368,14 +355,11 @@ export default function ProductoDetalle() {
                   className="rounded-lg border border-maxan-border bg-maxan-surface-secondary px-5 py-5"
                 >
                   <h2 id="titulo-consulta" className="text-lg font-bold text-maxan-navy">
-                    {sinPrecio
-                      ? 'Este producto se cotiza a medida.'
-                      : 'Producto no disponible para cotización en este momento.'}
+                    Este producto se cotiza a medida.
                   </h2>
                   <p className="prose-body mt-2">
-                    {sinPrecio
-                      ? `Escríbenos con la referencia ${referenciaProducto(consulta!)} y un asesor te confirma precio, disponibilidad y condiciones de venta.`
-                      : 'El stock es informativo y puede cambiar. Escríbenos y te confirmamos disponibilidad y alternativas.'}
+                    Escríbenos con la referencia {referenciaProducto(consulta!)} y un asesor te
+                    confirma precio, disponibilidad y condiciones de venta.
                   </p>
                   <div className="mt-4 flex flex-wrap gap-3">
                     <a

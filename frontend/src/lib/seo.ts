@@ -182,9 +182,6 @@ export interface ProductoSeo {
   descripcion: string | null
   imagenPrincipal: string | null
   precio: number
-  disponible: boolean
-  stock: number
-  inventariable: boolean
 }
 
 /** Ficha de producto para los resultados enriquecidos de Google. */
@@ -201,15 +198,15 @@ export function productJsonLd(producto: ProductoSeo): JsonLd {
     brand: { '@type': 'Brand', name: BRAND_NAME },
     // Un producto sin precio publicado no tiene oferta: emitir "0" sería un
     // dato estructurado inválido (el precio vive en WhatsApp como consulta).
+    // Con precio siempre hay oferta "InStock": Maxan vende sin inventario
+    // propio y el stock del ERP nunca bloquea la venta en la tienda.
     offers:
       producto.precio > 0
         ? {
             '@type': 'Offer',
             price: producto.precio.toFixed(0),
             priceCurrency: 'COP',
-            availability: producto.disponible
-              ? 'https://schema.org/InStock'
-              : 'https://schema.org/OutOfStock',
+            availability: 'https://schema.org/InStock',
             url: `${SITE_URL}/producto/${producto.id}`,
             seller: { '@type': 'Organization', name: BRAND_NAME },
           }

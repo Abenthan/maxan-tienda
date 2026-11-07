@@ -34,7 +34,7 @@ La BD es la del ERP dev (`maxan_db_dev`, puerto host **5433**). El `JWT_SECRET` 
 - **Sin pasarela de pago en el MVP**: el checkout genera una cotización en estado `pendiente`; el asesor confirma la venta desde el ERP (por eso el stock **nunca bloquea**; la disponibilidad es informativa).
 - **Desacoplamiento**: `cotizaciones_items` guarda snapshot (código, nombre, precio) sin FK al ERP.
 - **Precios propios**: el ERP no tiene precio maestro → `tienda.productos_venta` (precio, visibilidad). Administrable desde el ERP en **`/gestionTienda`** (módulo Tienda del ERP: alta desde inventario, precio/activo/destacado, permiso `tienda.gestionar`).
-- **Stock**: `inventable=true` → `SUM(inventario.entradas.cantidad_disponible)`. Los productos con stock 0 o sin precio no se venden.
+- **Disponibilidad (2026-11-07)**: Maxan **vende sin inventario propio** → la tienda no consulta ni muestra stock y **nunca se muestra "Agotado"**. Un producto se ofrece si tiene `precio > 0` en `tienda.productos_venta`; sin precio → "Consultar precio" (CTA a WhatsApp/correo). Las palabras clave `inventariable`/stock del ERP quedan fuera del catálogo de la tienda.
 - **Webhook a n8n**: al crear una cotización se dispara un POST best-effort a `N8N_WEBHOOK_URL` (`{evento:'cotizacion.creada', cotizacion:{...}}`). Vacío = desactivado. Uso: aviso por Telegram ahora, CRM a futuro.
 - **Sesiones**: identidad vía cookie de sesión de auth + JWT (mismo secreto) para llamadas autenticadas.
 
@@ -145,7 +145,7 @@ el sitemap con URLs de producto es `GET /sitemap.xml` (WP-24).
 - `cotizaciones` — `usuario_id`, `estado` (`pendiente|confirmada|cancelada`), `observaciones`.
 - `cotizaciones_items` — snapshot por línea (sin FK al ERP).
 
-El ERP referencia: `inventario.productos` (`id, codigo, nombre, categoria, inventariable, unidad_medida`). El stock informativo se obtiene de la vista `inventario.vw_stock_disponible` (join por `producto_id`).
+El ERP referencia: `inventario.productos` (`id, codigo, nombre, categoria, unidad_medida`). Desde el 2026-11-07 (venta sin inventario propio) **la tienda ya no consulta** `inventario.vw_stock_disponible`: no hay join ni campo de stock.
 
 ## Variables de entorno
 - **Backend**: `PORT` (3007; host **8082** vía compose/Caddy), `DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME` (dev: `host.docker.internal:5433`; prod: `maxan_db:5432`), `JWT_SECRET` (**idéntico al de maxan-auth/ERP**, obligatorio en prod), `JWT_EXPIRES_IN`, `CORS_ORIGINS`, `PUBLIC_URL`, `N8N_WEBHOOK_URL`.

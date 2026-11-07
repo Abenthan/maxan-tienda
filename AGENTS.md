@@ -9,8 +9,8 @@ Actualizar **AGENTS.md** y **README.md** conforme avanza el desarrollo.
 ## Estado actual (Fases 1 a la 7 — esqueleto + catálogo + login/registro SSO + carrito/cotizaciones, versionado, producción y **normalización de diseño/a11y/SEO**)
 - **Verificado**: `node --check` OK, `tsc -b && vite build` OK, `eslint` OK (0/0), `docker compose ... config` (dev) OK. Flujos de catálogo, SSO y pedidos probados punta a punta en `docker-compose.dev.yml` (auth dev en 5175/3006).
 - `backend/` — Express 5 + `pg` + `jsonwebtoken` + `cors`. `src/index.js` (servidor, `GET /health` con BD, `app.locals.pool`, `trust proxy`), `src/config/{db,auth}.js` (`auth.js` exige `JWT_SECRET` en prod), `src/middleware/auth.js` (`authenticate`/`authorizeRol`, idénticos al ERP). **Catálogo implementado** con capas `routes → controllers → services → repositories`:
-  - `src/repositories/catalogoRepository.js` — `listar()`/`obtenerPorId(id)`/`existe(id)`/`categorias()`. JOIN de `tienda.productos_venta` (activos) con `inventario.productos` y stock a través de la vista `inventario.vw_stock_disponible` (**join por `vs.producto_id`**). `obtenerPorId` y `existe` filtran `pv.activo = TRUE`; `existe()` es un `SELECT EXISTS` ligero. `categorias()` lee `DISTINCT categoria` de `inventario.productos`.
-  - `src/services/catalogoService.js` — shape estable para el frontend + cálculo de `disponible` (`precio > 0 && (!inventariable || stock > 0)`).
+  - `src/repositories/catalogoRepository.js` - `listar()`/`obtenerPorId(id)`/`existe(id)`/`categorias()`. JOIN de `tienda.productos_venta` (activos) con `inventario.productos` (**sin join de stock** desde 2026-11-07: venta sin inventario propio). `obtenerPorId` y `existe` filtran `pv.activo = TRUE`; `existe()` es un `SELECT EXISTS` ligero. `categorias()` lee `DISTINCT categoria` de `inventario.productos`.
+  - `src/services/catalogoService.js` - shape estable para el frontend + cálculo de `disponible` (`precio > 0`; Maxan vende sin inventario propio, el stock del ERP no participa y no se expone).
   - `src/controllers/catalogoController.js` — valida `id` numérico, 404 en detalle inexistente; `existe()` devuelve **200 si existe / 403 si no** (contrato para `auth_request` de nginx, no es un endpoint de negocio).
   - `src/routes/catalogo.js` — endpoints públicos `GET /productos`, `GET /productos/:id/existe`, `GET /productos/:id`, `GET /categorias`.
   - **Pedidos/cotizaciones implementados (Fase 4)** con capas `routes → controllers → services → repositories`, protegidos con `authenticate` + `authorizeRol("Cliente Tienda")`:
@@ -33,7 +33,7 @@ Actualizar **AGENTS.md** y **README.md** conforme avanza el desarrollo.
   - `src/main.tsx` — envuelve `<App>` con `<AuthProvider>` y `<CartProvider>`.
   - **Carrito/checkout (Fase 4)**: `src/pages/Carrito.tsx` — ruta `/carrito`; edita cantidades, observaciones opcionales, genera la cotización con `POST /api/pedidos` (exige sesión; si no hay, botón redirige al login SSO) y muestra confirmación al crearla.
   - `src/pages/Catalogo.tsx` — hero + filtro por categoría (`aria-pressed`), grid de `ProductCard`, estados de carga/error, JSON-LD `ItemList`.
-  - `src/pages/ProductoDetalle.tsx` — ruta `/producto/:id` con galería, migas de pan, cantidad y disponibilidad. Máquina de estados `loading | success | no-encontrado | error`: 400/404 del API abren el estado propio "producto no encontrado" (`noindex`, sin canonical ni JSON-LD), el error de red ofrece **Reintentar** y restaura canonical al recuperarse. Sin precio o sin disponibilidad muestra CTA real por WhatsApp y correo con la referencia; con precio y stock, botón "Agregar al carrito". JSON-LD `Product` + `BreadcrumbList` solo en `success`.
+  - `src/pages/ProductoDetalle.tsx` - ruta `/producto/:id` con galería, migas de pan, cantidad y disponibilidad. Máquina de estados `loading | success | no-encontrado | error`: 400/404 del API abren el estado propio "producto no encontrado" (`noindex`, sin canonical ni JSON-LD), el error de red ofrece **Reintentar** y restaura canonical al recuperarse. Sin precio muestra CTA real por WhatsApp y correo con la referencia ("se cotiza a medida"); con precio, badge "Disponible" y botón "Agregar al carrito" (nunca "Agotado"/"N en stock": venta sin inventario propio desde 2026-11-07). JSON-LD `Product` + `BreadcrumbList` solo en `success`.
   - `src/pages/Cotizaciones.tsx` — ruta `/cotizaciones`: mis cotizaciones (estado, fecha, total y conteo real de items), detalle expandible con máquina de estados por id (`loading`/`success`/`error` + reintento, ignorando respuestas obsoletas), confirmación inline antes de cancelar y badge `Cancelada`. Separa carga, error y vacío, y bloquea la vista hasta resolver `authLoading`. `noindex`.
   - `src/pages/NoEncontrada.tsx` — 404 real (`noindex` y sin canonical) en vez del redirect a `/`.
   - `src/App.tsx` — rutas `/`, `/producto/:id`, `/carrito`, `/cotizaciones`, `*` → 404. `ProductoRoute` remonta el detalle por `key={id}` (estado limpio al cambiar de producto).
@@ -65,7 +65,7 @@ Actualizar **AGENTS.md** y **README.md** conforme avanza el desarrollo.
 - **Sin pasarela de pago en el MVP**: el checkout crea una cotización `pendiente`; el asesor la confirma desde el ERP. El stock **nunca bloquea** (disponibilidad informativa).
 - **Desacoplamiento**: `cotizaciones_items` guarda snapshot (sin FK al ERP).
 - **Precios propios** en `tienda.productos_venta` (el ERP no tiene precio maestro). Admin desde el ERP en **`/gestionTienda`** (ver `maxan-erp/AGENTS.md` #71), o SQL en el MVP.
-- **Stock**: `inventable=true` → `SUM(inventario.entradas.cantidad_disponible)`. Sin precio o stock 0 → no se vende.
+- **Disponibilidad (2026-11-07)**: Maxan **vende sin inventario propio** → la tienda no consulta ni muestra stock y **nunca se muestra "Agotado"** ni "Sin stock". Un producto se ofrece si tiene `precio > 0`; sin precio → "Consultar precio" (CTA a WhatsApp/correo). El JSON-LD de producto emite siempre `InStock` cuando hay precio.
 - **Webhook a n8n**: POST best-effort a `N8N_WEBHOOK_URL` al crear cotización (`{evento:'cotizacion.creada', cotizacion:{...}}`); vacío = off.
 - **SSO**: identidad vía cookie de auth + JWT compartido (mismo secreto). Restaurar sesión con `GET auth/api/auth/session` (patrón `authSso.ts` de maxan-erp). **Fase 3 implementada**: registro/login delegan a maxan-auth (`?app=tienda`), el token vuelve por `?token=` y se valida con `/auth/me`. En dev el frontend proxya `/auth-sso → host.docker.internal:3006`; en prod los navegadores irán directo a `AUTH_URL`.
 - Capas backend: `routes` → `services` → `repositories` (no escribir SQL en las rutas). Backend en **CommonJS** (como auth).
@@ -74,7 +74,7 @@ Actualizar **AGENTS.md** y **README.md** conforme avanza el desarrollo.
 | Método | Ruta | Auth | Descripción |
 |---|---|---|---|
 | `GET` | `/health` | Público | Healthcheck con BD |
-| `GET` | `/api/catalogo/productos` | Público | **Implementado** — productos en venta + stock + `imagenPrincipal` (URL de R2) |
+| `GET` | `/api/catalogo/productos` | Público | **Implementado** - productos en venta + `imagenPrincipal` (URL de R2); sin stock (2026-11-07) |
 | `GET` | `/api/catalogo/productos/:id` | Público | **Implementado** — detalle producto + `imagenes[]` (todas las fotos ordenadas); 404 si no existe o está inactivo |
 | `GET` | `/api/catalogo/productos/:id/existe` | Público | **Implementado** — 200 si existe y está activo, 403 si no. Lo consume nginx (`auth_request`) para devolver 404 real en `/producto/:id` |
 | `GET` | `/api/catalogo/categorias` | Público | **Implementado** — categorías del catálogo |
@@ -87,12 +87,13 @@ Actualizar **AGENTS.md** y **README.md** conforme avanza el desarrollo.
 ## Variables de entorno
 - **Backend**: `PORT` (3007; host **8082**), `DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME` (dev `host.docker.internal:5433`; prod `maxan_db:5432`), `JWT_SECRET` (**idéntico a maxan-auth/ERP**, obligatorio en prod), `JWT_EXPIRES_IN`, `CORS_ORIGINS`, `PUBLIC_URL`, `N8N_WEBHOOK_URL`. `config/auth.js` lanza error si `NODE_ENV=production` sin `JWT_SECRET`.
 - **Frontend** (dev lo lee Vite de `frontend/.env.development`): `VITE_AUTH_DELEGATED=true` (SSO activo), `VITE_AUTH_URL` (URL pública de auth: dev `http://localhost:5175`, prod `https://auth.maxansistemas.com`), `VITE_API_PROXY` y `VITE_AUTH_SSO_PROXY` (solo usados por el proxy de Vite en dev; **sin Docker** → `http://localhost:3007` / `http://localhost:3006`; en contenedor usar `host.docker.internal`).
+  - **Fix 2026-11-07 (502 en catálogo con Docker dev)**: `tienda-frontend` ahora usa `env_file: .env.dev` en el compose y `vite.config.ts` prioriza `process.env.VITE_API_PROXY`/`VITE_AUTH_SSO_PROXY` sobre los `.env` de proyecto (con prefijo `''`, `loadEnv` **no** fusiona `process.env`; sin esta prioridad el contenedor leía los `localhost` de `.env.development` y el proxy a la API daba ECONNREFUSED → 502, aunque `/health` y el backend directo en 3007 respondieran bien). Al correr sin Docker sigue usando `frontend/.env.development`.
 - **Frontend prod** (`frontend/.env.production`, versionado): `VITE_AUTH_DELEGATED=true`, `VITE_AUTH_URL=https://auth.maxansistemas.com`. **Obligatorio** en el build de producción para activar el SSO (ver Fase 6).
 
 ## Modelo de datos
 - Reutiliza schema `usuarios` (identidad vía JWT) e `inventario` (catálogo + **`inventario.imagenes`** para fotos de productos).
 - Nuevo schema `tienda`: `productos_venta`, `cotizaciones`, `cotizaciones_items` (ver `../maxan-db/init/09_tienda.sql`).
-- Referencia ERP: `inventario.productos` (`id, codigo, nombre, categoria, inventariable, unidad_medida`) y stock = `SUM(inventario.entradas.cantidad_disponible)`.
+- Referencia ERP: `inventario.productos` (`id, codigo, nombre, categoria, unidad_medida`). El stock (vista `inventario.vw_stock_disponible`) pertenece al ERP y **la tienda ya no lo consulta** (2026-11-07: venta sin inventario propio).
 - **Imágenes**: tabla `inventario.imagenes` (id, producto_id FK→productos ON DELETE CASCADE, url, es_principal, orden, created_at). Imágenes almacenadas en Cloudflare R2 (bucket `maxan-erp`, **acceso público habilitado** → URLs `https://pub-<hash>.r2.dev/...`), la BD solo guarda URLs. La tienda hace LEFT JOIN LATERAL para obtener la imagen principal en el listado, y carga todas en el detalle. La imagen del modal del ERP y la tienda se veían rotas porque `R2_PUBLIC_URL` del ERP usaba el endpoint S3 API privado (fix documentado en `maxan-erp/AGENTS.md` #67).
 
 ## Docker
@@ -433,3 +434,32 @@ nginx de tienda con **autorización explícita** (igual que WP-12).
   producción tiene `precio > 0`** en `tienda.productos_venta` (solo los
   productos 11 y 27 tienen foto). Con precios la ficha emite `Offer`
   (verificado en dev, producto 27). Queda como dato comercial pendiente.
+
+## Disponibilidad sin stock (2026-11-07)
+
+**Decisión de negocio**: Maxan Sistemas **vende sin inventario propio**
+(vende por encargo / directo del proveedor), de modo que el stock del ERP
+no debe afectar la venta ni mostrarse en la tienda. Regla nueva:
+**`disponible = precio > 0`**; nunca se muestra "Agotado", "Sin stock" ni
+"N en stock".
+
+- **Backend**: `catalogoService` calcula `disponible: precio > 0` y deja de
+  exponer `inventariable`/`stock`; `catalogoRepository` ya no hace JOIN con
+  `inventario.vw_stock_disponible`; `pedidosService` valida la misma fórmula
+  (sin stock, una cotización solo exige precio > 0).
+- **Frontend**: `ProductCard` distingue solo "Consultar precio" (sin precio)
+  de "Agregar al carrito" (con precio); se eliminaron el badge "Agotado" y el
+  botón "Sin stock". `ProductoDetalle` muestra badge "Disponible" con precio
+  y el bloque "se cotiza a medida" solo cuando no hay precio (se eliminó la
+  variante por agotado y `mensajeConsultaDisponibilidad` del import;
+  la función sigue existiendo en `wa.ts` como parte del contrato compartido
+  con la web corporativa). El JSON-LD `Product` emite `InStock` siempre que
+  haya precio (nunca `OutOfStock` ante Google). `api.ts` ya no tipa
+  `inventariable`/`stock`. El carrito (`Carrito.tsx`) sigue revalidando el
+  precio con el catálogo antes de cotizar; el texto "precios y stock
+  se revalidan" pasó a "los precios se revalidan".
+- **Sin cambios de BD**: `tienda.productos_venta` e `inventario.*` quedan
+  intactos; el ERP sigue siendo dueño del inventario para sus procesos
+  internos, la tienda simplemente no lo consume.
+- **Verificación**: `node --check` OK (2 servicios + repositorio);
+  `npm run lint` 0/0; `npm run build` OK (JS 331,11 kB / gzip 105,25 kB).

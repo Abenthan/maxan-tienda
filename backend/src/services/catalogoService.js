@@ -1,24 +1,20 @@
 const catalogoRepository = require("../repositories/catalogoRepository");
 
-// Presenta el catálogo con un shape estable para el frontend y calcula la
-// disponibilidad: un producto se vende si tiene precio > 0 y, si es inventariable,
-// hay stock > 0. La disponibilidad es informativa (nunca bloquea en el MVP).
+// Presenta el catálogo con un shape estable para el frontend. Maxan vende sin
+// inventario propio: la disponibilidad depende solo del precio publicado
+// (precio > 0); el stock del ERP no participa y la tienda ya no lo expone.
 function toProducto(row) {
   const precio = Number(row.precio);
-  const stock = Number(row.stock);
-  const inventariable = Boolean(row.inventariable);
   return {
     id: Number(row.id),
     codigo: row.codigo,
     nombre: row.nombre,
     categoria: row.categoria,
     unidadMedida: row.unidad_medida,
-    inventariable,
     precio,
     destacado: Boolean(row.destacado),
     descripcion: row.descripcion,
-    stock,
-    disponible: precio > 0 && (!inventariable || stock > 0),
+    disponible: precio > 0,
     imagenPrincipal: row.imagen_principal || null,
   };
 }

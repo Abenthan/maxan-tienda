@@ -1,25 +1,23 @@
 const pool = require("../config/db");
 
-// Productos en venta (tienda.productos_venta activos) + datos del ERP + stock informativo.
-// El ERP es la única fuente de verdad de productos/inventario; la tienda solo administra
-// precio y visibilidad. El stock se obtiene de la vista compartida de inventario.
+// Productos en venta (tienda.productos_venta activos) + datos del ERP.
+// El ERP es la única fuente de verdad de productos; la tienda solo administra
+// precio y visibilidad. Maxan vende sin inventario propio: no se consulta
+// stock (la disponibilidad depende solo del precio publicado).
 const SELECT_PRODUCTOS = `
   SELECT
     p.id,
     p.codigo,
     p.nombre,
     p.categoria,
-    p.inventariable,
     p.unidad_medida,
     pv.precio,
     pv.destacado,
     pv.descripcion,
     pv.activo,
-    COALESCE(vs.stock_actual, 0)::numeric AS stock,
     img.url AS imagen_principal
   FROM tienda.productos_venta pv
   JOIN inventario.productos p ON p.id = pv.producto_id
-  LEFT JOIN inventario.vw_stock_disponible vs ON vs.producto_id = p.id
   LEFT JOIN LATERAL (
     SELECT url FROM inventario.imagenes
     WHERE producto_id = p.id AND es_principal = TRUE
